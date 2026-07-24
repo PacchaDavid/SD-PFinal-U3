@@ -19,9 +19,9 @@ export default function CircuitBreakersPage() {
   // Initial REST load
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`${config.EVENT_MONITOR_URL}/api/circuits`);
+      const res = await fetch(`${config.EVENT_MONITOR_URL}/status`);
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
+      const list = Array.isArray(data?.circuit_breakers) ? data.circuit_breakers : [];
       setCircuits(list);
       circuitsRef.current = list;
     } catch {

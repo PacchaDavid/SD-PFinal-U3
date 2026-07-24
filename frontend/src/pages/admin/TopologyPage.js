@@ -17,7 +17,7 @@ export default function TopologyPage() {
   useEffect(() => {
     const fetchNodes = async () => {
       try {
-        const res = await fetch(`${config.EVENT_MONITOR_URL}/api/nodes`);
+        const res = await fetch(`${config.EVENT_MONITOR_URL}/nodes`);
         const data = await res.json();
         setNodes(Array.isArray(data) ? data : []);
       } catch {

@@ -27,7 +27,7 @@ export default function SimulationPage() {
   const simulateEvent = async (type, data = {}) => {
     setProcessing(type);
     try {
-      await fetch(`${config.EVENT_MONITOR_URL}/api/events`, {
+      await fetch(`${config.EVENT_MONITOR_URL}/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

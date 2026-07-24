@@ -54,7 +54,7 @@ export default function EventsPage() {
   // Initial REST load
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch(`${config.EVENT_MONITOR_URL}/api/events?limit=50`);
+      const res = await fetch(`${config.EVENT_MONITOR_URL}/events?limit=50`);
       const data = await res.json();
       const eventList = Array.isArray(data) ? data : [];
       eventsRef.current = eventList;

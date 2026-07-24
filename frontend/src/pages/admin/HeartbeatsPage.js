@@ -17,7 +17,7 @@ export default function HeartbeatsPage() {
   // Initial REST load
   const fetchNodes = useCallback(async () => {
     try {
-      const res = await fetch(`${config.EVENT_MONITOR_URL}/api/nodes`);
+      const res = await fetch(`${config.EVENT_MONITOR_URL}/nodes`);
       const data = await res.json();
       const nodeList = Array.isArray(data) ? data : [];
       setNodes(nodeList);

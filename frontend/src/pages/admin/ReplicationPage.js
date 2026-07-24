@@ -20,8 +20,8 @@ export default function ReplicationPage() {
   const fetchData = useCallback(async () => {
     try {
       const [replication, replEntries] = await Promise.all([
-        fetch(`${config.EVENT_MONITOR_URL}/api/replication`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/api/replication/entries?limit=20`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.EVENT_MONITOR_URL}/status`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.EVENT_MONITOR_URL}/events?limit=20`).then(r => r.json()).catch(() => ({})),
       ]);
       setData(replication);
       setEntries(Array.isArray(replEntries) ? replEntries : []);

@@ -26,14 +26,13 @@ export default function DashboardPage() {
   // Initial REST load
   const fetchInitialData = useCallback(async () => {
     try {
-      const [nodes, circuits, replication, events, health] = await Promise.all([
-        fetch(`${config.EVENT_MONITOR_URL}/api/nodes`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/api/circuits`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/api/replication`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/api/events?limit=50`).then(r => r.json()).catch(() => ({})),
+      const [nodes, status, events, health] = await Promise.all([
+        fetch(`${config.EVENT_MONITOR_URL}/nodes`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.EVENT_MONITOR_URL}/status`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.EVENT_MONITOR_URL}/events?limit=50`).then(r => r.json()).catch(() => ({})),
         fetch(`${config.EVENT_MONITOR_URL}/health`).then(r => r.json()).catch(() => ({})),
       ]);
-      const fullData = { nodes, circuits, replication, events, health };
+      const fullData = { nodes, circuits: status?.circuit_breakers || [], replication: status?.services || [], events, health, status };
       setData(fullData);
 
       // Build chart from events
@@ -101,7 +100,7 @@ export default function DashboardPage() {
     { label: 'Servicios Activos', value: `${onlineCount}/${totalNodes}`, icon: <Dns />, color: 'success.main', bg: 'rgba(52,211,153,0.08)' },
     { label: 'Circuit Breakers', value: data?.circuits?.length || 0, icon: <Speed />, color: 'warning.main', bg: 'rgba(251,191,36,0.08)' },
     { label: 'Eventos (24h)', value: events.length, icon: <CloudQueue />, color: 'info.main', bg: 'rgba(96,165,250,0.08)' },
-    { label: 'Réplicas', value: data?.replication?.replicas || 3, icon: <Storage />, color: 'secondary.main', bg: 'rgba(255,107,157,0.08)' },
+    { label: 'Réplicas', value: 3, icon: <Storage />, color: 'secondary.main', bg: 'rgba(255,107,157,0.08)' },
     { label: 'Usuarios', value: data?.health?.totalUsers || '—', icon: <People />, color: 'primary.main', bg: 'rgba(124,92,252,0.08)' },
     { label: 'Películas', value: data?.health?.totalMovies || '—', icon: <MovieCreation />, color: 'success.light', bg: 'rgba(110,231,183,0.08)' },
   ];

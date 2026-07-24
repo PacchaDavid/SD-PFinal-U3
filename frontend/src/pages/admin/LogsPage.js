@@ -32,7 +32,7 @@ export default function LogsPage() {
       if (levelFilter) params.append('level', levelFilter);
       if (serviceFilter && serviceFilter !== 'todos') params.append('service', serviceFilter);
 
-      const res = await fetch(`${config.EVENT_MONITOR_URL}/api/events?${params}`);
+      const res = await fetch(`${config.EVENT_MONITOR_URL}/events?${params}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       setLogs(list);
