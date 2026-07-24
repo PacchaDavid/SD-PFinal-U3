@@ -55,7 +55,7 @@ management:
         enabled: true
   health:
     redis:
-      enabled: true
+      enabled: false
     db:
       enabled: true
 
