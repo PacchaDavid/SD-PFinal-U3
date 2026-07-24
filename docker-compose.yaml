@@ -46,6 +46,9 @@ services:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
+      args:
+        REACT_APP_API_HOST: ${REACT_APP_API_HOST:-${MACHINE2_IP:-localhost}}
+        REACT_APP_EVENT_MONITOR_HOST: ${REACT_APP_EVENT_MONITOR_HOST:-${MACHINE2_IP:-localhost}}
     container_name: streaming-frontend
     ports:
       - "80:80"
@@ -131,6 +134,13 @@ services:
       - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
       - MACHINE_ID=2
       - LOG_LEVEL=INFO
+      # Backend services hosts y puertos (configurables para multi-máquina, fallback a Docker DNS)
+      - LB_SERVICES__USUARIOS__HOST=${USUARIOS_SERVICE_HOST:-usuarios-service}
+      - LB_SERVICES__USUARIOS__PORT=${USUARIOS_SERVICE_PORT:-8080}
+      - LB_SERVICES__RECOMENDACIONES__HOST=${RECOMENDACIONES_SERVICE_HOST:-recomendaciones-service}
+      - LB_SERVICES__RECOMENDACIONES__PORT=${RECOMENDACIONES_SERVICE_PORT:-8080}
+      - LB_SERVICES__PAGOS__HOST=${PAGOS_SERVICE_HOST:-pagos-service}
+      - LB_SERVICES__PAGOS__PORT=${PAGOS_SERVICE_PORT:-8080}
     networks:
       - streaming-net
     depends_on:

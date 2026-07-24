@@ -4,6 +4,12 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
 
+# Build args para React (se incrustan en el JS en tiempo de build)
+ARG REACT_APP_API_HOST
+ARG REACT_APP_EVENT_MONITOR_HOST
+ENV REACT_APP_API_HOST=${REACT_APP_API_HOST:-localhost}
+ENV REACT_APP_EVENT_MONITOR_HOST=${REACT_APP_EVENT_MONITOR_HOST:-localhost}
+
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./

@@ -5,7 +5,7 @@ const getBaseUrl = () => {
 
 const getEventMonitorUrl = () => {
   const host = process.env.REACT_APP_EVENT_MONITOR_HOST || window.location.hostname || 'localhost';
-  return `http://${host}:5000`;
+  return `http://${host}:8082`;
 };
 
 const config = {
