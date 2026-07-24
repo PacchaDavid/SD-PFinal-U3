@@ -141,13 +141,15 @@ class LoadBalancerApp:
             "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS",
         ])
         def proxy_service(service_name: str, rest: str):
-            return self._handle_proxy(service_name, f"/api/{service_name}/{rest}")
+            # Reenviar solo el path real del backend, sin el prefijo de ruteo
+            # Ej: /api/usuarios/api/auth/login → rest=api/auth/login → /api/auth/login
+            return self._handle_proxy(service_name, f"/{rest}")
 
         @app.route("/api/<service_name>", methods=[
             "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS",
         ])
         def proxy_service_root(service_name: str):
-            return self._handle_proxy(service_name, f"/api/{service_name}")
+            return self._handle_proxy(service_name, "/")
 
         # Ruta por defecto (root y rutas no reconocidas)
         @app.route("/")

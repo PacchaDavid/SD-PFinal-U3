@@ -44,6 +44,11 @@ cleanup() {
         log_info "Deteniendo Máquina ${_MACHINE_ID} (perfil: ${profile})..."
         docker compose --env-file "$_ENV_FILE" --profile "$profile" down --remove-orphans 2>/dev/null || true
         log_success "Servicios de Máquina ${_MACHINE_ID} detenidos"
+        if [ -f "$_ENV_FILE" ]; then
+            log_info "Eliminando $_ENV_FILE para forzar regeneración limpia..."
+            rm -f "$_ENV_FILE"
+            log_success "Archivo .env eliminado"
+        fi
     else
         log_info "No hay servicios activos que detener"
     fi
@@ -250,11 +255,16 @@ main() {
     # Validar entorno
     validate_env "$machine_id"
 
-    # --stop: detener servicios y salir
+    # --stop: detener servicios, limpiar .env y salir
     if [ "$stop_services" = true ]; then
         log_info "Deteniendo servicios de Máquina ${machine_id}..."
         docker compose --env-file "$ENV_FILE" --profile "machine${machine_id}" down --remove-orphans
         log_success "Máquina ${machine_id} detenida"
+        if [ -f "$_ENV_FILE" ]; then
+            log_info "Eliminando $_ENV_FILE para forzar regeneración limpia en el próximo inicio..."
+            rm -f "$_ENV_FILE"
+            log_success "Archivo .env eliminado"
+        fi
         exit 0
     fi
 
