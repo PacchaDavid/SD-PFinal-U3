@@ -168,6 +168,11 @@ class LoadBalancerApp:
 
         Valida el servicio, y delega al ProxyHandler.
         """
+        # Responder inmediatamente a preflight OPTIONS (CORS)
+        # Si el backend no responde, el preflight fallaría con 503
+        if request.method == "OPTIONS":
+            return jsonify({"status": "ok"}), 200
+
         # Validar que el servicio exista
         mapped = SERVICE_ROUTE_MAP.get(service_name)
         if not mapped:
