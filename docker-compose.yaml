@@ -512,7 +512,7 @@ services:
         PORT: 8090
     container_name: streaming-recomendaciones-replication
     ports:
-      - "8091:8090"
+      - "8093:8090"
     environment:
       - COMPONENT=replication
       - PORT=8090
