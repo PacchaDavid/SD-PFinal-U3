@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import java.math.BigDecimal;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -55,7 +56,7 @@ public class DataInitializer implements CommandLineRunner {
         m.setImdbRating(imdb);
         m.setDirector(director);
         m.setCast(cast);
-        m.setPrice(price);
+        m.setPrice(BigDecimal.valueOf(price));
         m.setFeatured(featured);
         return m;
     }

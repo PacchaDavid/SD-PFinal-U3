@@ -1,6 +1,7 @@
 package com.streaming.recomendaciones.model;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -48,7 +49,7 @@ public class Movie {
     private String trailerUrl;
 
     @Column(name = "price", precision = 10, scale = 2)
-    private Double price = 0.0;
+    private BigDecimal price = BigDecimal.ZERO;
 
     @Column(name = "is_featured")
     private Boolean featured = false;
@@ -100,8 +101,8 @@ public class Movie {
     public String getTrailerUrl() { return trailerUrl; }
     public void setTrailerUrl(String trailerUrl) { this.trailerUrl = trailerUrl; }
 
-    public Double getPrice() { return price; }
-    public void setPrice(Double price) { this.price = price; }
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
 
     public Boolean getFeatured() { return featured; }
     public void setFeatured(Boolean featured) { this.featured = featured; }

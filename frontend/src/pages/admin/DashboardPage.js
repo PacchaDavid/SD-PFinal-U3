@@ -26,13 +26,14 @@ export default function DashboardPage() {
   // Initial REST load
   const fetchInitialData = useCallback(async () => {
     try {
-      const [nodes, status, events, health] = await Promise.all([
+      const [nodes, status, events, health, lbServices] = await Promise.all([
         fetch(`${config.EVENT_MONITOR_URL}/nodes`).then(r => r.json()).catch(() => ({})),
         fetch(`${config.EVENT_MONITOR_URL}/status`).then(r => r.json()).catch(() => ({})),
         fetch(`${config.EVENT_MONITOR_URL}/events?limit=50`).then(r => r.json()).catch(() => ({})),
         fetch(`${config.EVENT_MONITOR_URL}/health`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.API_BASE_URL}/health/services`).then(r => r.json()).catch(() => ({})),
       ]);
-      const fullData = { nodes, circuits: status?.circuit_breakers || [], replication: status?.services || [], events, health, status };
+      const fullData = { nodes, circuits: status?.circuit_breakers || [], replication: status?.services || [], events, health, status, lbServices };
       setData(fullData);
 
       // Build chart from events
@@ -89,12 +90,13 @@ export default function DashboardPage() {
     );
   }
 
-  const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
+  // Usar Load Balancer como fuente de verdad para servicios activos
+  const lbServices = data?.lbServices?.services || [];
+  const onlineCount = lbServices.filter(s => s.status === 'healthy' || s.status === 'HEALTHY' || s.healthy_count > 0).length;
+  const warningCount = lbServices.filter(s => s.status === 'degraded' || s.status === 'DEGRADED').length;
+  const offlineCount = lbServices.filter(s => s.status === 'unhealthy' || s.status === 'UNHEALTHY' || s.healthy_count === 0).length;
+  const totalNodes = lbServices.length || 3;
   const events = Array.isArray(data?.events) ? data.events : [];
-  const onlineCount = nodes.filter(n => n.status === 'online' || n.status === 'active').length;
-  const warningCount = nodes.filter(n => n.status === 'warning' || n.status === 'degraded').length;
-  const offlineCount = nodes.filter(n => n.status === 'offline' || n.status === 'inactive').length;
-  const totalNodes = nodes.length || 8;
 
   const metricCards = [
     { label: 'Servicios Activos', value: `${onlineCount}/${totalNodes}`, icon: <Dns />, color: 'success.main', bg: 'rgba(52,211,153,0.08)' },

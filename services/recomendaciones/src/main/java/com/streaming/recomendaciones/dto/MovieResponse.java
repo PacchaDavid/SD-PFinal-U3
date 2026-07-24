@@ -1,6 +1,7 @@
 package com.streaming.recomendaciones.dto;
 
 import com.streaming.recomendaciones.model.Movie;
+import java.math.BigDecimal;
 
 public class MovieResponse {
     private Long id;
@@ -15,7 +16,7 @@ public class MovieResponse {
     private Double imdbRating;
     private String director;
     private String cast;
-    private Double price;
+    private BigDecimal price;
     private Boolean featured;
 
     public static MovieResponse fromEntity(Movie movie) {
@@ -73,8 +74,8 @@ public class MovieResponse {
     public String getCast() { return cast; }
     public void setCast(String cast) { this.cast = cast; }
 
-    public Double getPrice() { return price; }
-    public void setPrice(Double price) { this.price = price; }
+    public BigDecimal getPrice() { return price; }
+    public void setPrice(BigDecimal price) { this.price = price; }
 
     public Boolean getFeatured() { return featured; }
     public void setFeatured(Boolean featured) { this.featured = featured; }

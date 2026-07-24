@@ -10,24 +10,39 @@ const NODE_STYLES = {
   offline: { bg: 'rgba(239,68,68,0.12)', border: '#ef4444', glow: 'rgba(239,68,68,0.2)' },
 };
 
+// Mapa de servicio → label e ícono para la topología
+const SERVICE_INFO = {
+  usuarios: { label: 'Usuarios', subtitle: 'Spring Boot :8081', icon: '👤' },
+  pagos: { label: 'Pagos', subtitle: 'Spring Boot :8083', icon: '💳' },
+  recomendaciones: { label: 'Recomendaciones', subtitle: 'Spring Boot :8091', icon: '🎬' },
+};
+
+function getServiceStatus(serviceName, lbServices) {
+  const svc = lbServices.find(s => s.service === serviceName);
+  if (!svc) return 'offline';
+  if (svc.status === 'healthy' || svc.status === 'HEALTHY' || svc.healthy_count > 0) return 'online';
+  if (svc.status === 'degraded' || svc.status === 'DEGRADED') return 'warning';
+  return 'offline';
+}
+
 export default function TopologyPage() {
-  const [nodes, setNodes] = useState([]);
+  const [lbServices, setLbServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchNodes = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`${config.EVENT_MONITOR_URL}/nodes`);
+        const res = await fetch(`${config.API_BASE_URL}/health/services`);
         const data = await res.json();
-        setNodes(Array.isArray(data) ? data : []);
+        setLbServices(Array.isArray(data?.services) ? data.services : []);
       } catch {
-        setNodes(getDemoNodes());
+        setLbServices([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchNodes();
-    const interval = setInterval(fetchNodes, 4000);
+    fetchData();
+    const interval = setInterval(fetchData, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -92,12 +107,18 @@ export default function TopologyPage() {
             icon="⚖️"
           />
 
-          {/* Layer 3: Services */}
+          {/* Layer 3: Services (dinámico desde Load Balancer) */}
           <Box sx={{ position: 'absolute', top: '52%', left: '8%', right: '8%' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 2 }}>
-              <TopologyNode label="Usuarios" subtitle="Spring Boot :8081" status="online" icon="👤" />
-              <TopologyNode label="Pagos" subtitle="Spring Boot :8083" status="warning" icon="💳" />
-              <TopologyNode label="Recomendaciones" subtitle="Spring Boot :8091" status="online" icon="🎬" />
+              {Object.entries(SERVICE_INFO).map(([key, info]) => (
+                <TopologyNode
+                  key={key}
+                  label={info.label}
+                  subtitle={info.subtitle}
+                  status={getServiceStatus(key, lbServices)}
+                  icon={info.icon}
+                />
+              ))}
             </Box>
           </Box>
 
@@ -108,7 +129,7 @@ export default function TopologyPage() {
                 <TopologyNode
                   key={name}
                   label={name}
-                  subtitle={`MariaDB`}
+                  subtitle="MariaDB"
                   status={i === 3 ? 'warning' : 'online'}
                   icon="🗄️"
                   small
@@ -119,24 +140,25 @@ export default function TopologyPage() {
         </Box>
       )}
 
-      {/* Node List Summary */}
+      {/* Service Status Summary */}
       <Card sx={{ mt: 3, borderRadius: 2 }}>
         <CardContent sx={{ p: 2 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>Estado de Nodos</Typography>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>Estado de Servicios (Load Balancer)</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {nodes.length > 0 ? nodes.map((node) => (
-              <Chip
-                key={node.id || node.name}
-                label={`${node.name || node.serviceName}`}
-                size="small"
-                color={node.status === 'online' ? 'success' : node.status === 'warning' ? 'warning' : 'error'}
-                variant="outlined"
-                sx={{ fontWeight: 500 }}
-              />
-            )) : (
-              ['Frontend', 'Load Balancer', 'Event Monitor', 'Usuarios', 'Pagos', 'Recomendaciones', 'Redis', 'Replication'].map((name) => (
-                <Chip key={name} label={name} size="small" color="success" variant="outlined" sx={{ fontWeight: 500 }} />
-              ))
+            {lbServices.length > 0 ? lbServices.map((svc) => {
+              const isHealthy = svc.status === 'healthy' || svc.status === 'HEALTHY' || svc.healthy_count > 0;
+              return (
+                <Chip
+                  key={svc.service}
+                  label={`${svc.service} (${isHealthy ? '✅' : '❌'})`}
+                  size="small"
+                  color={isHealthy ? 'success' : 'error'}
+                  variant="outlined"
+                  sx={{ fontWeight: 500 }}
+                />
+              );
+            }) : (
+              <Typography variant="caption" color="text.secondary">Sin datos del Load Balancer</Typography>
             )}
           </Box>
         </CardContent>
@@ -180,17 +202,4 @@ function TopologyNode({ label, subtitle, status, icon, small }) {
       <span className={`status-dot ${status}`} style={{ marginTop: small ? 4 : 8 }} />
     </Card>
   );
-}
-
-function getDemoNodes() {
-  return [
-    { name: 'Frontend', status: 'online', serviceName: 'frontend' },
-    { name: 'Load Balancer', status: 'online', serviceName: 'load-balancer' },
-    { name: 'Event Monitor', status: 'online', serviceName: 'event-monitor' },
-    { name: 'Usuarios', status: 'online', serviceName: 'usuarios' },
-    { name: 'Pagos', status: 'warning', serviceName: 'pagos' },
-    { name: 'Recomendaciones', status: 'online', serviceName: 'recomendaciones' },
-    { name: 'Redis', status: 'online', serviceName: 'redis' },
-    { name: 'Replication', status: 'online', serviceName: 'replication' },
-  ];
 }
