@@ -13,7 +13,7 @@ ENV REACT_APP_EVENT_MONITOR_HOST=${REACT_APP_EVENT_MONITOR_HOST:-localhost}
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY frontend/ ./
 RUN npm run build

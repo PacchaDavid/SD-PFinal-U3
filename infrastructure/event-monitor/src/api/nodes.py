@@ -83,6 +83,19 @@ def register_node():
         tags=data.get("tags", {}),
     )
 
+    # Registrar también en HeartbeatMonitor para tracking de salud en tiempo real
+    # Sin esto, el nodo nunca se marcaría como INACTIVE al dejar de enviar heartbeats
+    hb_monitor = get_heartbeat_monitor()
+    if hb_monitor:
+        hb_monitor.register_node(HeartbeatData(
+            node_id=node_id,
+            node_name=data.get("node_name", node_id),
+            service_name=data.get("service_name", "unknown"),
+            machine_id=int(data.get("machine_id", 0)),
+            timestamp=time.time(),
+            status="active",
+        ))
+
     on_node_registered_callback(node)
 
     return jsonify(node.to_dict()), 201
