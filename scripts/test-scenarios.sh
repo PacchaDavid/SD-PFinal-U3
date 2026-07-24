@@ -73,7 +73,7 @@ check "Load Balancer Health" "${LOAD_BALANCER}/health"
 log_step "Escenario 2: Registro de Nodos"
 for i in 1 2 3 4 5; do
     api_post "${EVENT_MONITOR}/api/nodes/register" \
-        "{\"machine_id\":$i,\"name\":\"Machine $i\",\"ip\":\"192.168.1.$i\",\"status\":\"active\"}" > /dev/null
+        "{\"machine_id\":$i,\"name\":\"Machine $i\",\"ip\":\"192.168.2.$i\",\"status\":\"active\"}" > /dev/null
 done
 check_json "Nodos registrados" "${EVENT_MONITOR}/api/nodes" '. | length >= 3'
 $VERBOSE && curl -s "${EVENT_MONITOR}/api/nodes" | jq .

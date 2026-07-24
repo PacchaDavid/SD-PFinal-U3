@@ -109,43 +109,43 @@ para comunicación entre ellas.
 
 ```bash
 # En TODAS las máquinas — permitir tráfico interno entre el clúster
-# (Reemplazar 192.168.1.0/24 con la subred real)
+# (Reemplazar 192.168.2.0/24 con la subred real)
 
 # Máquina 1 (Frontend)
-sudo ufw allow from 192.168.1.0/24 to any port 80 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 3000 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 80 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 3000 proto tcp
 
 # Máquina 2 (Infraestructura)
-sudo ufw allow from 192.168.1.0/24 to any port 5000 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 8000 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 6379 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 8082 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 5000 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8000 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 6379 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8082 proto tcp
 
 # Máquina 3 (Usuarios)
-sudo ufw allow from 192.168.1.0/24 to any port 8081 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 3307:3310 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 8090 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8081 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 3307:3310 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8090 proto tcp
 
 # Máquina 4 (Recomendaciones)
-sudo ufw allow from 192.168.1.0/24 to any port 8091 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 3311:3314 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 8091 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8091 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 3311:3314 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8091 proto tcp
 
 # Máquina 5 (Pagos)
-sudo ufw allow from 192.168.1.0/24 to any port 8083 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 3315:3318 proto tcp
-sudo ufw allow from 192.168.1.0/24 to any port 8092 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8083 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 3315:3318 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8092 proto tcp
 ```
 
 ### 🆔 IDs, IPs y Roles de cada Máquina
 
 | ID | IP Sugerida | Rol | Descripción |
 |---|---|---|---|
-| `1` | `192.168.1.101` | **Frontend** | Sirve la interfaz React. No tiene lógica de negocio. |
-| `2` | `192.168.1.102` | **Infraestructura Central** | Corazón del sistema. Ejecuta Event Monitor (WebSocket + REST), Load Balancer y Redis. |
-| `3` | `192.168.1.103` | **Microservicio Usuarios** | Registro, autenticación (JWT) y perfiles. 1 DB primaria + 3 réplicas. |
-| `4` | `192.168.1.104` | **Microservicio Recomendaciones** | Catálogo de películas y recomendaciones. 1 DB primaria + 3 réplicas. |
-| `5` | `192.168.1.105` | **Microservicio Pagos** | Gestión de pagos simulados. 1 DB primaria + 3 réplicas. |
+| `1` | `192.168.2.101` | **Frontend** | Sirve la interfaz React. No tiene lógica de negocio. |
+| `2` | `192.168.2.102` | **Infraestructura Central** | Corazón del sistema. Ejecuta Event Monitor (WebSocket + REST), Load Balancer y Redis. |
+| `3` | `192.168.2.103` | **Microservicio Usuarios** | Registro, autenticación (JWT) y perfiles. 1 DB primaria + 3 réplicas. |
+| `4` | `192.168.2.104` | **Microservicio Recomendaciones** | Catálogo de películas y recomendaciones. 1 DB primaria + 3 réplicas. |
+| `5` | `192.168.2.105` | **Microservicio Pagos** | Gestión de pagos simulados. 1 DB primaria + 3 réplicas. |
 
 ### 📝 Configuración de Archivos `.env`
 
@@ -156,16 +156,16 @@ con las IPs reales de cada máquina:
 # deployment/machine1/.env — Frontend (Machine 1)
 MACHINE_ID=1
 MACHINE_NAME="Frontend Web"
-MACHINE_IP=192.168.1.101                # IP real de esta máquina
-MACHINE2_IP=192.168.1.102               # IP de Máquina 2 (crítica)
-REACT_APP_API_URL=http://192.168.1.102:8000    # Load Balancer
+MACHINE_IP=192.168.2.101                # IP real de esta máquina
+MACHINE2_IP=192.168.2.102               # IP de Máquina 2 (crítica)
+REACT_APP_API_URL=http://192.168.2.102:8000    # Load Balancer
 ```
 
 ```bash
 # deployment/machine2/.env — Infraestructura Central (Machine 2)
 MACHINE_ID=2
 MACHINE_NAME="Infraestructura Central"
-MACHINE_IP=192.168.1.102                # IP real de esta máquina
+MACHINE_IP=192.168.2.102                # IP real de esta máquina
 ENABLE_EVENT_MONITOR=true
 ENABLE_LOAD_BALANCER=true
 ENABLE_REDIS=true
@@ -176,27 +176,27 @@ LOG_LEVEL=INFO
 # deployment/machine3/.env — Usuarios (Machine 3)
 MACHINE_ID=3
 MACHINE_NAME="Microservicio Usuarios"
-MACHINE_IP=192.168.1.103                # IP real de esta máquina
-REDIS_HOST=192.168.1.102                # IP de Machine 2
-EVENT_MONITOR_URL=http://192.168.1.102:8082  # Event Monitor en Machine 2
+MACHINE_IP=192.168.2.103                # IP real de esta máquina
+REDIS_HOST=192.168.2.102                # IP de Machine 2
+EVENT_MONITOR_URL=http://192.168.2.102:8082  # Event Monitor en Machine 2
 ```
 
 ```bash
 # deployment/machine4/.env — Recomendaciones (Machine 4)
 MACHINE_ID=4
 MACHINE_NAME="Microservicio Recomendaciones"
-MACHINE_IP=192.168.1.104                # IP real de esta máquina
-REDIS_HOST=192.168.1.102                # IP de Machine 2
-EVENT_MONITOR_URL=http://192.168.1.102:8082  # Event Monitor en Machine 2
+MACHINE_IP=192.168.2.104                # IP real de esta máquina
+REDIS_HOST=192.168.2.102                # IP de Machine 2
+EVENT_MONITOR_URL=http://192.168.2.102:8082  # Event Monitor en Machine 2
 ```
 
 ```bash
 # deployment/machine5/.env — Pagos (Machine 5)
 MACHINE_ID=5
 MACHINE_NAME="Microservicio Pagos"
-MACHINE_IP=192.168.1.105                # IP real de esta máquina
-REDIS_HOST=192.168.1.102                # IP de Machine 2
-EVENT_MONITOR_URL=http://192.168.1.102:8082  # Event Monitor en Machine 2
+MACHINE_IP=192.168.2.105                # IP real de esta máquina
+REDIS_HOST=192.168.2.102                # IP de Machine 2
+EVENT_MONITOR_URL=http://192.168.2.102:8082  # Event Monitor en Machine 2
 ```
 
 ### 🖧 Diagrama de Conexiones entre Máquinas
@@ -204,7 +204,7 @@ EVENT_MONITOR_URL=http://192.168.1.102:8082  # Event Monitor en Machine 2
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        RED INTERNA                              │
-│                     192.168.1.0/24                              │
+│                     192.168.2.0/24                              │
 └─────────────────────────────────────────────────────────────────┘
      │            │            │            │            │
      ▼            ▼            ▼            ▼            ▼
@@ -275,6 +275,35 @@ chmod +x deploy.sh scripts/*.sh
 
 # Demo rápida (sin pausas)
 ./scripts/demo.sh --quick
+```
+
+---
+
+## 👤 Credenciales de Acceso
+
+### Usuarios del Sistema (Frontend)
+
+| Usuario | Email | Contraseña | Rol |
+|---|---|---|---|
+| **admin** | `admin@streaming.com` | `admin123` | **ADMIN** — Acceso completo al panel `/admin` |
+| **usuario1** | `usuario1@streaming.com` | `password123` | **USER** — Catálogo, perfil y pagos |
+| **usuario2** | `usuario2@streaming.com` | `password123` | **USER** — Catálogo, perfil y pagos |
+
+El usuario **admin** puede acceder a la ruta `/admin` para ver Dashboard, Heartbeats,
+Replicación, Circuit Breakers, Logs, Eventos y Simulación de fallos en tiempo real.
+
+### Bases de Datos (MariaDB)
+
+| Recurso | Usuario | Contraseña | Bases de Datos |
+|---|---|---|---|
+| **Root** (todas las máquinas) | `root` | `root_secret_2024` | `streaming_usuarios`, `streaming_recomendaciones`, `streaming_pagos` |
+| **App** (todas las máquinas) | `streaming` | `streaming_secret_2024` | `streaming_usuarios`, `streaming_recomendaciones`, `streaming_pagos` |
+
+### JWT
+
+```yaml
+secret: c3RyZWFtaW5nLWRpc3RyaWJ1dGVkLXBsYXRmb3JtLWp3dC1zZWNyZXQta2V5LTIwMjQ=
+expiration: 86400000ms (24 horas)
 ```
 
 ---

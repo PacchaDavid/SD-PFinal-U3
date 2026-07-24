@@ -17,6 +17,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Variables globales para cleanup
+_MACHINE_ID=""
+_ENV_FILE=""
+
 # =============================================================================
 # Funciones de utilidad
 # =============================================================================
@@ -26,16 +30,47 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =============================================================================
+# Cleanup: detener servicios al presionar Ctrl+C
+# =============================================================================
+cleanup() {
+    echo ""
+    log_warn "╔═══════════════════════════════════════════╗"
+    log_warn "║  Ctrl+C detectado — Deteniendo servicios  ║"
+    log_warn "╚═══════════════════════════════════════════╝"
+    echo ""
+
+    if [ -n "$_MACHINE_ID" ] && [ -n "$_ENV_FILE" ]; then
+        local profile="machine${_MACHINE_ID}"
+        log_info "Deteniendo Máquina ${_MACHINE_ID} (perfil: ${profile})..."
+        docker compose --env-file "$_ENV_FILE" --profile "$profile" down --remove-orphans 2>/dev/null || true
+        log_success "Servicios de Máquina ${_MACHINE_ID} detenidos"
+    else
+        log_info "No hay servicios activos que detener"
+    fi
+
+    echo ""
+    log_info "Saliendo..."
+    exit 0
+}
+
+# =============================================================================
 # Validaciones iniciales
 # =============================================================================
 validate_env() {
     local machine_id=$1
     local env_file="deployment/machine${machine_id}/.env"
+    local example_file="deployment/machine${machine_id}/.env.example"
 
     if [ ! -f "$env_file" ]; then
-        log_error "Archivo .env no encontrado: $env_file"
-        log_error "Asegúrate de que deployment/machine${machine_id}/.env existe"
-        exit 1
+        if [ -f "$example_file" ]; then
+            log_info "Creando $env_file desde $example_file..."
+            cp "$example_file" "$env_file"
+            log_success "Archivo .env creado: $env_file"
+        else
+            log_error "Archivo .env no encontrado: $env_file"
+            log_error "Tampoco existe el .env.example: $example_file"
+            exit 1
+        fi
     fi
 
     log_info "Usando configuración: $env_file"
@@ -176,6 +211,7 @@ main() {
         echo "  5  - Microservicio Pagos"
         echo ""
         echo "Options:"
+        echo "  --stop          Detener servicios de esta máquina"
         echo "  --skip-build    Omitir construcción de imágenes"
         echo "  --skip-health   Omitir verificación de salud"
         echo ""
@@ -183,6 +219,7 @@ main() {
     fi
 
     local machine_id=$1
+    local stop_services=false
     local skip_build=false
     local skip_health=false
 
@@ -190,6 +227,7 @@ main() {
     shift
     for arg in "$@"; do
         case $arg in
+            --stop) stop_services=true ;;
             --skip-build) skip_build=true ;;
             --skip-health) skip_health=true ;;
             *) log_warn "Opción desconocida: $arg" ;;
@@ -202,8 +240,23 @@ main() {
         exit 1
     fi
 
+    # Guardar IDs globales para cleanup
+    _MACHINE_ID="$machine_id"
+    _ENV_FILE="deployment/machine${machine_id}/.env"
+
+    # Trap para Ctrl+C (SIGINT) y terminación (SIGTERM)
+    trap cleanup SIGINT SIGTERM
+
     # Validar entorno
     validate_env "$machine_id"
+
+    # --stop: detener servicios y salir
+    if [ "$stop_services" = true ]; then
+        log_info "Deteniendo servicios de Máquina ${machine_id}..."
+        docker compose --env-file "$ENV_FILE" --profile "machine${machine_id}" down --remove-orphans
+        log_success "Máquina ${machine_id} detenida"
+        exit 0
+    fi
 
     # Desplegar
     if [ "$skip_build" = false ]; then
@@ -220,6 +273,9 @@ main() {
 
     # Registrar nodo
     register_node "$machine_id"
+
+    # Remover trap: Ctrl+C ya no detiene servicios después del despliegue exitoso
+    trap - SIGINT SIGTERM
 
     echo ""
     log_success "═══════════════════════════════════════════"

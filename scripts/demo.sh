@@ -80,7 +80,7 @@ echo "  - Reporta estado, CPU, memoria y latencia"
 echo ""
 for i in 1 2 3 4 5; do
     api_post "${EVENT_MONITOR}/api/nodes/register" \
-        "{\"machine_id\":$i,\"name\":\"Machine $i\",\"ip\":\"192.168.1.$i\",\"status\":\"active\",\"services\":[\"$(case $i in 1) echo frontend;;2) echo event-monitor,load-balancer,redis;;3) echo usuarios,replication;;4) echo recomendaciones,replication;;5) echo pagos,replication;; esac)\"]}"
+        "{\"machine_id\":$i,\"name\":\"Machine $i\",\"ip\":\"192.168.2.$i\",\"status\":\"active\",\"services\":[\"$(case $i in 1) echo frontend;;2) echo event-monitor,load-balancer,redis;;3) echo usuarios,replication;;4) echo recomendaciones,replication;;5) echo pagos,replication;; esac)\"]}"
     echo "  ✓ Máquina $i registrada"
 done
 echo ""
