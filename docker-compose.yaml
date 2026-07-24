@@ -1,0 +1,745 @@
+# =============================================================================
+# docker-compose.yaml - Plataforma Distribuida de Streaming
+# =============================================================================
+# Uso: docker compose --profile machine<N> up -d
+# Ejemplo: docker compose --profile machine1 up -d
+# =============================================================================
+
+# =============================================================================
+# Red compartida
+# =============================================================================
+networks:
+  streaming-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.27.0.0/16
+
+# =============================================================================
+# Volúmenes compartidos
+# =============================================================================
+volumes:
+  redis-data:
+  mariadb-usuarios-primary:
+  mariadb-usuarios-replica1:
+  mariadb-usuarios-replica2:
+  mariadb-usuarios-replica3:
+  mariadb-pagos-primary:
+  mariadb-pagos-replica1:
+  mariadb-pagos-replica2:
+  mariadb-pagos-replica3:
+  mariadb-recomendaciones-primary:
+  mariadb-recomendaciones-replica1:
+  mariadb-recomendaciones-replica2:
+  mariadb-recomendaciones-replica3:
+
+# =============================================================================
+# Servicios
+# =============================================================================
+services:
+
+  # ---------------------------------------------------------------------------
+  # MÁQUINA 1: Frontend Web
+  # ---------------------------------------------------------------------------
+  frontend:
+    profiles: ["machine1"]
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: streaming-frontend
+    ports:
+      - "80:80"
+    environment:
+      - REACT_APP_API_URL=http://${MACHINE2_IP:-localhost}:8000
+      - REACT_APP_WS_URL=ws://${MACHINE2_IP:-localhost}:8082/ws
+      - LOAD_BALANCER_HOST=${LOAD_BALANCER_HOST:-${MACHINE2_IP:-load-balancer}}
+      - EVENT_MONITOR_HOST=${EVENT_MONITOR_HOST:-${MACHINE2_IP:-event-monitor}}
+    networks:
+      - streaming-net
+    # NOTA: Dependencias cross-profile eliminadas intencionalmente.
+    # El frontend se comunica con Machine 2 vía red, no vía Docker Compose.
+    # Los reintentos se manejan desde el frontend (axios retry).
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # MÁQUINA 2: Infraestructura Central
+  # ---------------------------------------------------------------------------
+  event-monitor:
+    profiles: ["machine2"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: event-monitor
+        PORT: 8082
+    container_name: streaming-event-monitor
+    ports:
+      - "8082:8082"
+    environment:
+      - COMPONENT=event-monitor
+      - PORT=8082
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=6379
+      - MACHINE_ID=2
+      - LOG_LEVEL=INFO
+    networks:
+      - streaming-net
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  redis:
+    profiles: ["machine2"]
+    image: redis:7-alpine
+    container_name: streaming-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - streaming-net
+    command: redis-server --appendonly yes --loglevel notice
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  load-balancer:
+    profiles: ["machine2"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: load-balancer
+        PORT: 8000
+    container_name: streaming-load-balancer
+    ports:
+      - "8000:8000"
+    environment:
+      - COMPONENT=load-balancer
+      - PORT=8000
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=6379
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=2
+      - LOG_LEVEL=INFO
+    networks:
+      - streaming-net
+    depends_on:
+      - redis
+      - event-monitor
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # MÁQUINA 3: Microservicio Usuarios
+  # ---------------------------------------------------------------------------
+  usuarios-service:
+    profiles: ["machine3"]
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args:
+        SERVICE_NAME: usuarios
+    container_name: streaming-usuarios
+    ports:
+      - "8081:8080"
+    environment:
+      - SERVICE_NAME=usuarios
+      - SERVER_PORT=8080
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_PRIMARY_HOST=usuarios-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=usuarios-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=usuarios-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=usuarios-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_usuarios
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=3
+      - REPLICATION_MANAGER_URL=http://usuarios-replication:8090
+    networks:
+      - streaming-net
+    depends_on:
+      - usuarios-db-primary
+      - usuarios-db-replica1
+      - usuarios-db-replica2
+      - usuarios-db-replica3
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  usuarios-db-primary:
+    profiles: ["machine3"]
+    image: mariadb:11.2
+    container_name: streaming-usuarios-db-primary
+    ports:
+      - "3307:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_usuarios
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-usuarios-primary:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --log-bin
+      --binlog-format=ROW
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  usuarios-db-replica1:
+    profiles: ["machine3"]
+    image: mariadb:11.2
+    container_name: streaming-usuarios-db-replica1
+    ports:
+      - "3308:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_usuarios
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-usuarios-replica1:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  usuarios-db-replica2:
+    profiles: ["machine3"]
+    image: mariadb:11.2
+    container_name: streaming-usuarios-db-replica2
+    ports:
+      - "3309:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_usuarios
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-usuarios-replica2:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  usuarios-db-replica3:
+    profiles: ["machine3"]
+    image: mariadb:11.2
+    container_name: streaming-usuarios-db-replica3
+    ports:
+      - "3310:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_usuarios
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-usuarios-replica3:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  usuarios-replication:
+    profiles: ["machine3"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: replication
+        PORT: 8090
+    container_name: streaming-usuarios-replication
+    ports:
+      - "8090:8090"
+    environment:
+      - COMPONENT=replication
+      - PORT=8090
+      - SERVICE_NAME=usuarios
+      - DB_PRIMARY_HOST=usuarios-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=usuarios-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=usuarios-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=usuarios-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_usuarios
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=3
+      - QUORUM_MIN=2
+      - POLL_INTERVAL=500
+      - REPLICA_TIMEOUT=3000
+    networks:
+      - streaming-net
+    depends_on:
+      - usuarios-db-primary
+      - usuarios-db-replica1
+      - usuarios-db-replica2
+      - usuarios-db-replica3
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # MÁQUINA 4: Microservicio Recomendaciones
+  # ---------------------------------------------------------------------------
+  recomendaciones-service:
+    profiles: ["machine4"]
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args:
+        SERVICE_NAME: recomendaciones
+    container_name: streaming-recomendaciones
+    ports:
+      - "8091:8080"
+    environment:
+      - SERVICE_NAME=recomendaciones
+      - SERVER_PORT=8080
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_PRIMARY_HOST=recomendaciones-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=recomendaciones-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=recomendaciones-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=recomendaciones-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_recomendaciones
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=4
+      - REPLICATION_MANAGER_URL=http://recomendaciones-replication:8090
+    networks:
+      - streaming-net
+    depends_on:
+      - recomendaciones-db-primary
+      - recomendaciones-db-replica1
+      - recomendaciones-db-replica2
+      - recomendaciones-db-replica3
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  recomendaciones-db-primary:
+    profiles: ["machine4"]
+    image: mariadb:11.2
+    container_name: streaming-recomendaciones-db-primary
+    ports:
+      - "3311:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_recomendaciones
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-recomendaciones-primary:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --log-bin
+      --binlog-format=ROW
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  recomendaciones-db-replica1:
+    profiles: ["machine4"]
+    image: mariadb:11.2
+    container_name: streaming-recomendaciones-db-replica1
+    ports:
+      - "3312:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_recomendaciones
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-recomendaciones-replica1:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  recomendaciones-db-replica2:
+    profiles: ["machine4"]
+    image: mariadb:11.2
+    container_name: streaming-recomendaciones-db-replica2
+    ports:
+      - "3313:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_recomendaciones
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-recomendaciones-replica2:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  recomendaciones-db-replica3:
+    profiles: ["machine4"]
+    image: mariadb:11.2
+    container_name: streaming-recomendaciones-db-replica3
+    ports:
+      - "3314:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_recomendaciones
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-recomendaciones-replica3:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  recomendaciones-replication:
+    profiles: ["machine4"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: replication
+        PORT: 8090
+    container_name: streaming-recomendaciones-replication
+    ports:
+      - "8091:8090"
+    environment:
+      - COMPONENT=replication
+      - PORT=8090
+      - SERVICE_NAME=recomendaciones
+      - DB_PRIMARY_HOST=recomendaciones-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=recomendaciones-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=recomendaciones-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=recomendaciones-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_recomendaciones
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=4
+      - QUORUM_MIN=2
+      - POLL_INTERVAL=500
+      - REPLICA_TIMEOUT=3000
+    networks:
+      - streaming-net
+    depends_on:
+      - recomendaciones-db-primary
+      - recomendaciones-db-replica1
+      - recomendaciones-db-replica2
+      - recomendaciones-db-replica3
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # MÁQUINA 5: Microservicio Pagos
+  # ---------------------------------------------------------------------------
+  pagos-service:
+    profiles: ["machine5"]
+    build:
+      context: .
+      dockerfile: docker/service.Dockerfile
+      args:
+        SERVICE_NAME: pagos
+    container_name: streaming-pagos
+    ports:
+      - "8083:8080"
+    environment:
+      - SERVICE_NAME=pagos
+      - SERVER_PORT=8080
+      - SPRING_PROFILES_ACTIVE=docker
+      - DB_PRIMARY_HOST=pagos-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=pagos-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=pagos-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=pagos-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_pagos
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=5
+      - REPLICATION_MANAGER_URL=http://pagos-replication:8090
+    networks:
+      - streaming-net
+    depends_on:
+      - pagos-db-primary
+      - pagos-db-replica1
+      - pagos-db-replica2
+      - pagos-db-replica3
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  pagos-db-primary:
+    profiles: ["machine5"]
+    image: mariadb:11.2
+    container_name: streaming-pagos-db-primary
+    ports:
+      - "3315:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_pagos
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-pagos-primary:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --log-bin
+      --binlog-format=ROW
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  pagos-db-replica1:
+    profiles: ["machine5"]
+    image: mariadb:11.2
+    container_name: streaming-pagos-db-replica1
+    ports:
+      - "3316:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_pagos
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-pagos-replica1:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  pagos-db-replica2:
+    profiles: ["machine5"]
+    image: mariadb:11.2
+    container_name: streaming-pagos-db-replica2
+    ports:
+      - "3317:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_pagos
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-pagos-replica2:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  pagos-db-replica3:
+    profiles: ["machine5"]
+    image: mariadb:11.2
+    container_name: streaming-pagos-db-replica3
+    ports:
+      - "3318:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_secret_2024
+      - MARIADB_DATABASE=streaming_pagos
+      - MARIADB_USER=streaming
+      - MARIADB_PASSWORD=streaming_secret_2024
+    volumes:
+      - mariadb-pagos-replica3:/var/lib/mysql
+      - ./configs/mariadb/microservice.cnf:/etc/mysql/conf.d/microservice.cnf
+    networks:
+      - streaming-net
+    command: |
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  pagos-replication:
+    profiles: ["machine5"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: replication
+        PORT: 8090
+    container_name: streaming-pagos-replication
+    ports:
+      - "8092:8090"
+    environment:
+      - COMPONENT=replication
+      - PORT=8090
+      - SERVICE_NAME=pagos
+      - DB_PRIMARY_HOST=pagos-db-primary
+      - DB_PRIMARY_PORT=3306
+      - DB_REPLICA1_HOST=pagos-db-replica1
+      - DB_REPLICA1_PORT=3306
+      - DB_REPLICA2_HOST=pagos-db-replica2
+      - DB_REPLICA2_PORT=3306
+      - DB_REPLICA3_HOST=pagos-db-replica3
+      - DB_REPLICA3_PORT=3306
+      - DB_NAME=streaming_pagos
+      - DB_USER=streaming
+      - DB_PASSWORD=streaming_secret_2024
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=5
+      - QUORUM_MIN=2
+      - POLL_INTERVAL=500
+      - REPLICA_TIMEOUT=3000
+    networks:
+      - streaming-net
+    depends_on:
+      - pagos-db-primary
+      - pagos-db-replica1
+      - pagos-db-replica2
+      - pagos-db-replica3
+    restart: unless-stopped

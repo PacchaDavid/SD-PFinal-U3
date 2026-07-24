@@ -1,0 +1,35 @@
+# =============================================================================
+# Circuit Breaker Configuration
+# Plataforma Distribuida de Streaming
+# =============================================================================
+# Los valores aquí son defaults. Las variables de entorno (prefijo CB_)
+# tienen prioridad sobre este archivo.
+# =============================================================================
+
+circuit_breaker:
+  failure_threshold: 5
+  success_threshold: 3
+  open_timeout_seconds: 30
+  half_open_max_requests: 3
+
+monitoring:
+  check_interval_seconds: 5
+  sliding_window_size: 20
+
+notification:
+  redis_channel: "circuit-breaker"
+  event_monitor_url: "http://event-monitor:8082"
+
+logging:
+  level: "INFO"
+
+states:
+  closed:
+    description: "Funcionamiento normal"
+    color: "green"
+  open:
+    description: "Circuit Breaker abierto - rechazando solicitudes"
+    color: "red"
+  half_open:
+    description: "Probando recuperación"
+    color: "yellow"

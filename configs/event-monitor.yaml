@@ -1,0 +1,39 @@
+# =============================================================================
+# Event Monitor Configuration
+# Plataforma Distribuida de Streaming
+# =============================================================================
+# Los valores aquí son defaults. Las variables de entorno (prefijo EM_)
+# tienen prioridad sobre este archivo.
+# =============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8082
+
+redis:
+  host: "redis"
+  port: 6379
+  channels:
+    heartbeats: "heartbeats"
+    events: "events"
+    metrics: "metrics"
+    replication: "replication"
+    circuit_breaker: "circuit-breaker"
+    system: "system"
+
+heartbeat:
+  interval_seconds: 2
+  timeout_seconds: 10
+  max_missed: 3
+
+websocket:
+  heartbeat_interval: 30
+
+node_registration:
+  required: true
+  auto_remove_after_minutes: 5
+
+logging:
+  level: "INFO"
+  max_events_in_memory: 10000
+  retention_days: 7

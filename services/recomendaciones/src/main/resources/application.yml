@@ -1,0 +1,90 @@
+# =============================================================================
+# Recomendaciones Service - Application Configuration
+# Plataforma Distribuida de Streaming
+# =============================================================================
+
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: recomendaciones-service
+
+  datasource:
+    url: jdbc:mariadb://${DB_PRIMARY_HOST:localhost}:${DB_PRIMARY_PORT:3306}/${DB_NAME:streaming_recomendaciones}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USER:streaming}
+    password: ${DB_PASSWORD:streaming_secret_2024}
+    driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 600000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,env
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+
+event-monitor:
+  url: ${EVENT_MONITOR_URL:http://localhost:8082}
+  heartbeat-interval: 2000
+
+replication:
+  manager:
+    url: ${REPLICATION_MANAGER_URL:http://localhost:8090}
+  primary:
+    host: ${DB_PRIMARY_HOST:localhost}
+    port: ${DB_PRIMARY_PORT:3306}
+  replicas:
+    - id: 1
+      host: ${DB_REPLICA1_HOST:localhost}
+      port: ${DB_REPLICA1_PORT:3306}
+    - id: 2
+      host: ${DB_REPLICA2_HOST:localhost}
+      port: ${DB_REPLICA2_PORT:3306}
+    - id: 3
+      host: ${DB_REPLICA3_HOST:localhost}
+      port: ${DB_REPLICA3_PORT:3306}
+
+jwt:
+  secret: c3RyZWFtaW5nLWRpc3RyaWJ1dGVkLXBsYXRmb3JtLWp3dC1zZWNyZXQta2V5LTIwMjQ=
+  expiration: 86400000
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.streaming: DEBUG

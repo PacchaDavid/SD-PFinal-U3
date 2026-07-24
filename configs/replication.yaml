@@ -1,0 +1,60 @@
+# =============================================================================
+# Replication Manager Configuration
+# Plataforma Distribuida de Streaming
+# =============================================================================
+# NOTA: Replicación propia - NO utiliza Galera ni replicación nativa de MariaDB
+# Los valores aquí son defaults. Las variables de entorno (prefijo REP_)
+# tienen prioridad sobre este archivo.
+# =============================================================================
+
+replication:
+  service_name: "usuarios"
+  poll_interval_ms: 500
+  replica_timeout_ms: 3000
+  quorum_min: 2
+  max_batch_size: 100
+  retry_attempts: 3
+  retry_delay_ms: 1000
+
+databases:
+  primary:
+    host: "localhost"
+    port: 3306
+    database: "streaming"
+    user: "streaming"
+    password: "streaming_secret_2024"
+  replicas:
+    - id: 1
+      host: "localhost"
+      port: 3307
+      database: "streaming"
+      user: "streaming"
+      password: "streaming_secret_2024"
+    - id: 2
+      host: "localhost"
+      port: 3308
+      database: "streaming"
+      user: "streaming"
+      password: "streaming_secret_2024"
+    - id: 3
+      host: "localhost"
+      port: 3309
+      database: "streaming"
+      user: "streaming"
+      password: "streaming_secret_2024"
+
+recovery:
+  auto_catch_up: true
+  catch_up_batch_size: 50
+  health_check_interval: 2
+
+notifications:
+  redis_channel: "replication"
+  event_monitor_url: "http://event-monitor:8082"
+
+metrics:
+  enabled: true
+  history_size: 1000
+
+logging:
+  level: "INFO"

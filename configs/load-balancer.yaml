@@ -1,0 +1,48 @@
+# =============================================================================
+# Load Balancer Configuration
+# Plataforma Distribuida de Streaming
+# =============================================================================
+# Los valores aquí son defaults. Las variables de entorno (prefijo LB_)
+# tienen prioridad sobre este archivo.
+# =============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+event_monitor:
+  url: "http://event-monitor:8082"
+  health_check_interval: 5
+
+services:
+  usuarios:
+    host: "usuarios-service"
+    port: 8080
+    health_path: "/actuator/health"
+    max_retries: 3
+    timeout_ms: 5000
+  pagos:
+    host: "pagos-service"
+    port: 8080
+    health_path: "/actuator/health"
+    max_retries: 3
+    timeout_ms: 5000
+  recomendaciones:
+    host: "recomendaciones-service"
+    port: 8080
+    health_path: "/actuator/health"
+    max_retries: 3
+    timeout_ms: 5000
+
+balancing:
+  strategy: "round-robin"
+  health_check_interval_seconds: 10
+  unhealthy_threshold: 3
+
+redis:
+  host: "redis"
+  port: 6379
+  enabled: true
+
+logging:
+  level: "INFO"
