@@ -65,7 +65,6 @@ management:
 
 # --- Event Monitor ---
 event-monitor:
-  url: ${EVENT_MONITOR_URL:http://localhost:8082}
   heartbeat-interval: 2000
 
 # --- Replication Manager ---

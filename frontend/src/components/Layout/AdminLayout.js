@@ -7,9 +7,9 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon, Dashboard as DashboardIcon, FavoriteBorder,
-  CloudQueue, Storage, ReportProblem, EventNote, DonutLarge,
+  Storage, ReportProblem, EventNote,
   Settings, AdminPanelSettings, Home as HomeIcon,
-  Logout as LogoutIcon, Person as PersonIcon,
+  Logout as LogoutIcon, Person as PersonIcon, MovieCreation, PersonAdd,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 
@@ -17,13 +17,14 @@ const DRAWER_WIDTH = 260;
 
 const adminNavItems = [
   { label: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
-  { label: 'Topología', path: '/admin/topology', icon: <DonutLarge /> },
   { label: 'Heartbeats', path: '/admin/heartbeats', icon: <FavoriteBorder /> },
   { label: 'Replicación', path: '/admin/replication', icon: <Storage /> },
   { label: 'Circuit Breakers', path: '/admin/circuit-breakers', icon: <ReportProblem /> },
   { label: 'Logs', path: '/admin/logs', icon: <EventNote /> },
-  { label: 'Eventos', path: '/admin/events', icon: <CloudQueue /> },
   { label: 'Simulación', path: '/admin/simulation', icon: <Settings /> },
+  { divider: true },
+  { label: '+ Crear Película', path: '/admin/create-movie', icon: <MovieCreation /> },
+  { label: '+ Crear Usuario', path: '/admin/create-user', icon: <PersonAdd /> },
 ];
 
 export default function AdminLayout() {
@@ -70,7 +71,10 @@ export default function AdminLayout() {
 
       {/* Nav Items */}
       <List sx={{ flex: 1, px: 1, pt: 1 }}>
-        {adminNavItems.map((item) => {
+        {adminNavItems.map((item, idx) => {
+          if (item.divider) {
+            return <Divider key={`div-${idx}`} sx={{ my: 1, borderColor: 'rgba(255,255,255,0.06)' }} />;
+          }
           const isActive = item.path === '/admin'
             ? location.pathname === '/admin'
             : location.pathname.startsWith(item.path);
@@ -195,9 +199,9 @@ export default function AdminLayout() {
 
             <Typography variant="h6" fontWeight={700} sx={{ flex: 1, fontSize: '1.1rem' }}>
               {adminNavItems.find((i) =>
-                i.path === '/admin'
+                i.path && (i.path === '/admin'
                   ? location.pathname === '/admin'
-                  : location.pathname.startsWith(i.path)
+                  : location.pathname.startsWith(i.path))
               )?.label || 'Panel'}
             </Typography>
 

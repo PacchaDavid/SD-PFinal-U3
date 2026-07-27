@@ -73,7 +73,7 @@ export default function MovieDetailPage() {
     );
   }
 
-  const posterUrl = movie.posterUrl || `https://picsum.photos/seed/movie${movie.id}/800/1200`;
+  const posterUrl = movie.posterUrl || '/boletos.svg';
 
   return (
     <Box sx={{ animation: 'fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both' }}>

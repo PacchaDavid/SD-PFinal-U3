@@ -60,7 +60,6 @@ management:
       enabled: true
 
 event-monitor:
-  url: ${EVENT_MONITOR_URL:http://localhost:8082}
   heartbeat-interval: 2000
 
 replication:

@@ -1,7 +1,9 @@
 package com.streaming.recomendaciones.controller;
 
+import com.streaming.recomendaciones.dto.CreateMovieRequest;
 import com.streaming.recomendaciones.dto.MovieResponse;
 import com.streaming.recomendaciones.service.MovieService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +47,25 @@ public class MovieController {
     @GetMapping("/search")
     public ResponseEntity<List<MovieResponse>> search(@RequestParam String q) {
         return ResponseEntity.ok(movieService.searchMovies(q));
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createMovie(@RequestBody CreateMovieRequest request) {
+        try {
+            if (request.getTitle() == null || request.getTitle().isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "El título es requerido"));
+            }
+            if (request.getGenre() == null || request.getGenre().isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "El género es requerido"));
+            }
+            MovieResponse created = movieService.createMovie(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Error al crear película: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/count")

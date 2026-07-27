@@ -27,12 +27,29 @@ def init_nodes(registry_fn, hb_monitor_fn, registered_cb=None):
 
 @nodes_bp.route("/nodes", methods=["GET"])
 def list_nodes():
-    """Lista todos los nodos registrados en el sistema."""
+    """Lista todos los nodos registrados en el sistema.
+
+    Primero intenta con el NodeRegistry (registro manual via POST).
+    Si está vacío, usa el HeartbeatMonitor (nodos detectados via Redis Pub/Sub).
+    """
     registry = get_registry()
     if registry:
         summary = registry.get_summary()
-        return jsonify(summary)
-    return jsonify({"error": "Registry no disponible"}), 503
+        # Si el registry tiene datos, devolverlos
+        if summary.get("total_nodes", 0) > 0:
+            return jsonify(summary)
+
+    # Fallback: usar HeartbeatMonitor (nodos detectados via Redis)
+    hb_monitor = get_heartbeat_monitor()
+    if hb_monitor:
+        summary = hb_monitor.get_summary()
+        if summary.get("total_nodes", 0) > 0:
+            return jsonify(summary)
+
+    # Si ambos están vacíos o no disponibles
+    if registry:
+        return jsonify(registry.get_summary())
+    return jsonify({"error": "No hay datos de nodos disponibles"}), 503
 
 
 @nodes_bp.route("/nodes/<node_id>", methods=["GET"])
@@ -111,40 +128,6 @@ def unregister_node(node_id: str):
     if registry.unregister_node(node_id):
         return jsonify({"message": f"Nodo {node_id} eliminado"})
     return jsonify({"error": "Nodo no encontrado"}), 404
-
-
-@nodes_bp.route("/nodes/<node_id>/heartbeat", methods=["POST"])
-def receive_heartbeat(node_id: str):
-    """Recibe un heartbeat de un nodo específico.
-
-    Request body (opcional):
-        cpu_percent: float
-        memory_percent: float
-        uptime_seconds: float
-        status: str
-        custom_metrics: dict
-    """
-    data = request.get_json(silent=True) or {}
-
-    hb_monitor = get_heartbeat_monitor()
-    if not hb_monitor:
-        return jsonify({"error": "HeartbeatMonitor no disponible"}), 503
-
-    heartbeat = HeartbeatData(
-        node_id=node_id,
-        node_name=data.get("node_name", node_id),
-        service_name=data.get("service_name", "unknown"),
-        machine_id=int(data.get("machine_id", 0)),
-        timestamp=time.time(),
-        status=data.get("status", "active"),
-        cpu_percent=float(data.get("cpu_percent", 0.0)),
-        memory_percent=float(data.get("memory_percent", 0.0)),
-        uptime_seconds=float(data.get("uptime_seconds", 0.0)),
-        custom_metrics=data.get("custom_metrics", {}),
-    )
-
-    node = hb_monitor.register_node(heartbeat)
-    return jsonify({"status": "ok", "node": node.to_dict()})
 
 
 @nodes_bp.route("/nodes/status", methods=["GET"])

@@ -23,42 +23,54 @@
 ## 🏗 Arquitectura del Sistema
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     MÁQUINA 1 (Frontend)                     │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │              React App (Puerto 80)                     │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐  │ │
-│  │  │ Login/   │  │ Catálogo │  │ Panel de Admin      │  │ │
-│  │  │ Registro │  │ Películas│  │ (Dashboard, Logs,   │  │ │
-│  │  │          │  │          │  │  Heartbeats, Eventos)│  │ │
-│  │  └──────────┘  └──────────┘  └─────────────────────┘  │ │
-│  │                    │                ▲                   │ │
-│  │              REST  │        WebSocket│                   │ │
-│  └────────────────────┼────────────────┼───────────────────┘ │
-└───────────────────────┼────────────────┼─────────────────────┘
-                        │                │
-┌───────────────────────┼────────────────┼─────────────────────┐
-│              MÁQUINA 2 (Infraestructura Central)              │
-│  ┌──────────────────┐ │  ┌─────────────┴──────────┐          │
-│  │  Load Balancer   │◄┘  │    Event Monitor       │          │
-│  │  (Python :8000)  │    │   (Flask-SocketIO      │          │
-│  │  Round-robin     │    │    + WebSocket :5000)   │          │
-│  └────────┬─────────┘    └─────────────────────────┘          │
-│           │                         ▲                        │
-│           │                         │ Pub/Sub                │
-│           │              ┌──────────┴──────────┐              │
-│           │              │      Redis          │              │
-│           │              │   (Bus de Eventos)  │              │
-│           │              └─────────────────────┘              │
-└───────────┼───────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     MÁQUINA 1 (Frontend)                         │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              React App (Puerto 80)                         │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌─────────────────────────┐  │ │
+│  │  │ Login/   │  │ Catálogo │  │ Panel de Admin          │  │ │
+│  │  │ Registro │  │ Películas│  │ (Dashboard, Logs,       │  │ │
+│  │  │          │  │          │  │  Heartbeats, Eventos)    │  │ │
+│  │  └──────────┘  └──────────┘  └─────────────────────────┘  │ │
+│  │                    │                   ▲                    │ │
+│  │             REST   │         WebSocket │                    │ │
+│  └────────────────────┼───────────────────┼────────────────────┘ │
+└───────────────────────┼───────────────────┼──────────────────────┘
+                        │                   │
+┌───────────────────────┼───────────────────┼──────────────────────┐
+│              MÁQUINA 2 (Infraestructura Central)                  │
+│  ┌──────────────────┐ │                   │                      │
+│  │  Load Balancer   │◄┘    ┌──────────────┴──────────┐          │
+│  │  (Python :8000)  │       │     Event Monitor       │          │
+│  │  Round-robin     │       │   (Flask-SocketIO       │          │
+│  └────────┬─────────┘       │    + WebSocket :8082)   │          │
+│           │                 │    Escucha Redis Pub/Sub │          │
+│           │                 └──────────────┬───────────┘          │
+│           │                               │                      │
+│           │                    ┌───────────┴──────────┐           │
+│           │                    │       Redis          │           │
+│           │                    │    (Bus de Eventos   │           │
+│           │                    │     Pub/Sub :6379)   │           │
+│           │                    └───────────┬──────────┘           │
+│           │                                │                     │
+│           │      ┌─────────────────────────┼──────────────────┐  │
+│           │      │  Todos publican en Redis│                  │  │
+│           │      │  • heartbeats (c/2s)    │                  │  │
+│           │      │  • events, metrics      │                  │  │
+│           │      │  • circuit-breaker      │                  │  │
+│           │      │  • replication events   │                  │  │
+│           │      └─────────────────────────┘                  │  │
+└───────────┼──────────────────────────────────────────────────────┘
             │
-   ┌────────┼────────────┬────────────────────┐
-   │        │            │                    │
-┌──┴────┐ ┌─┴──────┐ ┌──┴────────┐  ┌───────┴────────┐
-│MAQ 3  │ │ MAQ 4  │ │   MAQ 5   │  │  ... más      │
-│Usuarios│ │Recomen.│ │  Pagos    │  │  servicios     │
-│:8081   │ │:8091   │ │  :8083    │  │                │
-└───────┘ └────────┘ └───────────┘  └────────────────┘
+   ┌────────┼────────────────┬────────────────────┐
+   │        │                │                    │
+┌──┴─────┐ ┌┴────────┐ ┌────┴────────┐  ┌───────┴────────┐
+│ MAQ 3  │ │ MAQ 4   │ │   MAQ 5     │  │  ... más      │
+│Usuarios│ │Recomen. │ │  Pagos       │  │  servicios     │
+│:8081   │ │:8091    │ │  :8083       │  │                │
+│Publica  │ │Publica   │ │Publica       │  │                │
+│en Redis │ │en Redis  │ │en Redis      │  │                │
+└────────┘ └─────────┘ └──────────────┘  └────────────────┘
 ```
 
 ---
@@ -69,7 +81,7 @@
 |---|---|---|---|
 | **Frontend** | React 18 + MUI | 80 | Interfaz de usuario y panel admin |
 | **Load Balancer** | Python Flask | 8000 | Balanceo round-robin + health checks |
-| **Event Monitor** | Python Flask + SocketIO | 5000 | Corazón del sistema: eventos, WebSocket, métricas |
+| **Event Monitor** | Python Flask + SocketIO | 8082 | Corazón del sistema: suscrito a Redis Pub/Sub, reenvía eventos por WebSocket al panel admin |
 | **Redis** | Redis 7 | 6379 | Bus de eventos Pub/Sub |
 | **Usuarios** | Spring Boot + JPA | 8081 | CRUD de usuarios + auth JWT |
 | **Pagos** | Spring Boot + JPA | 8083 | Gestión de pagos simulados |
@@ -99,10 +111,10 @@ para comunicación entre ellas.
 
 | Máquina | Rol | Servicios | Puertos a Abrir |
 |---|---|---|---|
-| **1** | Frontend Web | React + Nginx | `80 (HTTP)`, `3000 (dev)` |
-| **2** | Infraestructura Central | Event Monitor Flask, Load Balancer Flask, Redis | `5000 (Event Monitor)`, `8000 (Load Balancer)`, `6379 (Redis)`, `8082 (EM alternativo)` |
+| **1** | Frontend Web | React + Nginx | `80 (HTTP)` |
+| **2** | Infraestructura Central | Event Monitor, Load Balancer, Redis, Circuit Breaker | `8082 (Event Monitor)`, `8000 (Load Balancer)`, `6379 (Redis)`, `8084 (Circuit Breaker)` |
 | **3** | Microservicio Usuarios | Spring Boot, MariaDB 1P+3R, Replication Python | `8081 (Service)`, `3307 (DB Primary)`, `3308-3310 (DB Réplicas)`, `8090 (Replication)` |
-| **4** | Microservicio Recomendaciones | Spring Boot, MariaDB 1P+3R, Replication Python | `8091 (Service)`, `3311 (DB Primary)`, `3312-3314 (DB Réplicas)`, `8091 (Replication)` |
+| **4** | Microservicio Recomendaciones | Spring Boot, MariaDB 1P+3R, Replication Python | `8091 (Service)`, `3311 (DB Primary)`, `3312-3314 (DB Réplicas)`, `8093 (Replication)` |
 | **5** | Microservicio Pagos | Spring Boot, MariaDB 1P+3R, Replication Python | `8083 (Service)`, `3315 (DB Primary)`, `3316-3318 (DB Réplicas)`, `8092 (Replication)` |
 
 ### 🔓 Reglas de Firewall Recomendadas
@@ -113,13 +125,12 @@ para comunicación entre ellas.
 
 # Máquina 1 (Frontend)
 sudo ufw allow from 192.168.2.0/24 to any port 80 proto tcp
-sudo ufw allow from 192.168.2.0/24 to any port 3000 proto tcp
 
 # Máquina 2 (Infraestructura)
-sudo ufw allow from 192.168.2.0/24 to any port 5000 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8082 proto tcp
 sudo ufw allow from 192.168.2.0/24 to any port 8000 proto tcp
 sudo ufw allow from 192.168.2.0/24 to any port 6379 proto tcp
-sudo ufw allow from 192.168.2.0/24 to any port 8082 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8084 proto tcp
 
 # Máquina 3 (Usuarios)
 sudo ufw allow from 192.168.2.0/24 to any port 8081 proto tcp
@@ -129,7 +140,7 @@ sudo ufw allow from 192.168.2.0/24 to any port 8090 proto tcp
 # Máquina 4 (Recomendaciones)
 sudo ufw allow from 192.168.2.0/24 to any port 8091 proto tcp
 sudo ufw allow from 192.168.2.0/24 to any port 3311:3314 proto tcp
-sudo ufw allow from 192.168.2.0/24 to any port 8091 proto tcp
+sudo ufw allow from 192.168.2.0/24 to any port 8093 proto tcp
 
 # Máquina 5 (Pagos)
 sudo ufw allow from 192.168.2.0/24 to any port 8083 proto tcp
@@ -211,16 +222,18 @@ EVENT_MONITOR_URL=http://192.168.2.102:8082  # Event Monitor en Machine 2
 ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ ┌────────┐
 │ MAQ 1  │ │  MAQ 2   │ │  MAQ 3   │ │   MAQ 4    │ │ MAQ 5  │
 │Frontend│ │Infraest. │ │Usuarios  │ │Recomendac. │ │ Pagos  │
-│:80     │ │:5000     │ │:8081     │ │:8091       │ │:8083   │
+│:80     │ │:8082     │ │:8081     │ │:8091       │ │:8083   │
 │        │ │:8000     │ │:3307-3310│ │:3311-3314  │ │:3315-18│
-│        │ │:6379     │ │:8090     │ │:8091(rep)  │ │:8092   │
+│        │ │:6379     │ │:8090     │ │:8093(rep)  │ │:8092   │
+│        │ │:8084     │ │           │ │            │ │        │
 └─────────┘ └──────────┘ └──────────┘ └────────────┘ └────────┘
      │            │            │            │            │
      └────────────┴────────────┴────────────┴────────────┘
                     Todos se comunican vía:
-        • HTTP/WS → Machine 2 (Event Monitor :5000)
-        • HTTP    → Machine 2 (Load Balancer :8000)
-        • TCP     → Machine 2 (Redis :6379)
+        • Redis Pub/Sub → Machine 2 (Redis :6379) — heartbeats, eventos, métricas
+        • HTTP          → Machine 2 (Load Balancer :8000) — peticiones del frontend
+        • WebSocket     → Machine 2 (Event Monitor :8082) — tiempo real al panel admin
+        • TCP           → Machine 2 (Redis :6379) — Pub/Sub
 ```
 
 ---
@@ -381,19 +394,28 @@ Panel Admin (Frontend)
 | `GET` | `/api/pagos/api/pagos/user/{userId}` | Historial de pagos |
 | `POST` | `/api/pagos/api/pagos/{id}/process` | Procesar pago |
 
-### Event Monitor (Puerto 5000)
+### Event Monitor (Puerto 8082)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/nodes` | Listar nodos |
-| `POST` | `/api/nodes/register` | Registrar nodo |
-| `POST` | `/api/nodes/heartbeat` | Enviar heartbeat |
-| `GET` | `/api/events` | Listar eventos |
-| `POST` | `/api/events` | Crear evento |
-| `GET` | `/api/metrics` | Métricas del sistema |
-| `GET` | `/api/status` | Estado general |
+| `GET` | `/nodes` | Listar nodos registrados |
+| `POST` | `/nodes` | Registrar nodo en el sistema |
+| `GET` | `/nodes/<node_id>` | Detalle de un nodo |
+| `DELETE` | `/nodes/<node_id>` | Eliminar un nodo |
+| `GET` | `/nodes/status` | Resumen de estado de nodos |
+| `GET` | `/events` | Listar eventos del sistema |
+| `POST` | `/events` | Crear un evento |
+| `GET` | `/events/types` | Tipos de evento disponibles |
+| `GET` | `/events/summary` | Resumen de eventos por tipo/severidad |
+| `GET` | `/metrics` | Métricas del sistema |
+| `GET` | `/metrics/topology` | Topología de red por máquina |
+| `GET` | `/status` | Estado general del sistema |
 | WebSocket | `/ws` (SocketIO) | Tiempo real |
+
+> **Nota**: Los heartbeats **no** se envían por HTTP. Todos los servicios publican
+> directamente en **Redis Pub/Sub** (canal `heartbeats`) cada 2 segundos.
+> El Event Monitor está suscrito a Redis y los reenvía por WebSocket al frontend.
 
 ### WebSocket (SocketIO)
 
@@ -501,7 +523,6 @@ distributed-streaming/
 | Sección | Descripción | Actualización |
 |---|---|---|
 | **Dashboard** | Métricas generales, gráfico de actividad, estado de servicios | Tiempo real (WebSocket) |
-| **Topología** | Diagrama visual de nodos con colores de estado | Cada 4s |
 | **Heartbeats** | Lista de nodos con latencia y último heartbeat | Tiempo real (WebSocket) |
 | **Replicación** | Estado de réplicas, ACKs, entries recientes | Tiempo real (WebSocket) |
 | **Circuit Breakers** | Estados CLOSED/OPEN/HALF_OPEN por servicio | Tiempo real (WebSocket) |
@@ -596,12 +617,15 @@ cd frontend
 npm install
 npm start                      # http://localhost:3000
 
-# Infraestructura (con Docker)
-docker compose --profile machine2 up -d
+# Todos los servicios (entorno completo en una máquina)
+docker compose --profile machine1 --profile machine2 \
+               --profile machine3 --profile machine4 \
+               --profile machine5 up -d
 
 # Verificar
-curl http://localhost:5000/health
-curl http://localhost:8000/health
+curl http://localhost:8082/health   # Event Monitor
+curl http://localhost:8000/health   # Load Balancer
+curl http://localhost:80            # Frontend
 ```
 
 ---
@@ -610,6 +634,7 @@ curl http://localhost:8000/health
 
 - **No usa Galera**: La replicación es implementada por el Replication Manager en Python con WAL propio y quorum 2/3
 - **No hay streaming real**: El catálogo contiene metadatos de películas con botón de reproducción simulado
-- **Redis como bus de eventos**: Nunca como simple caché — todos los eventos viajan por Pub/Sub
+- **Redis como bus de eventos**: Todos los servicios publican directamente en Redis Pub/Sub (canales: `heartbeats`, `events`, `metrics`, `circuit-breaker`, `replication`). El Event Monitor consume y reenvía por WebSocket. Sin HTTP innecesario.
+- **Heartbeats por Redis**: Cada servicio publica su heartbeat cada 2s en el canal `heartbeats`. Si Redis no está disponible, el sistema usa **fallback automático a HTTP** para no perder visibilidad.
 - **Observabilidad completa**: No es necesario abrir terminales durante la demostración
 - **Arquitectura limpia**: Componentes desacoplados, configuración por entorno, principios SOLID

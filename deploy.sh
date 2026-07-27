@@ -168,8 +168,10 @@ register_node() {
 
     local event_monitor_url="${EVENT_MONITOR_URL:-http://localhost:8082}"
 
-    log_info "Registrando nodo en Event Monitor..."
+    log_info "Registrando nodo en Event Monitor (los heartbeats se encargan del monitoreo)..."
 
+    # El Event Monitor ahora recibe heartbeats vía Redis Pub/Sub automáticamente.
+    # Este registro manual es opcional para metadatos de la máquina física.
     local payload=$(cat <<EOF
 {
     "node_id": "machine-${machine_id}",
@@ -189,7 +191,7 @@ EOF
     # Intentar registro (no crítico si falla)
     curl -s -X POST "${event_monitor_url}/nodes" \
         -H "Content-Type: application/json" \
-        -d "$payload" 2>/dev/null || log_warn "No se pudo registrar en Event Monitor (arrancará después)"
+        -d "$payload" 2>/dev/null || log_warn "Registro manual omitido (los heartbeats lo cubren)"
 }
 
 # =============================================================================
@@ -293,28 +295,28 @@ main() {
     log_success "═══════════════════════════════════════════"
     echo ""
 
-    # Mostrar resumen de puertos
-    echo "Puertos expuestos:"
+    # Mostrar resumen de puertos        echo "Puertos expuestos:"
     case $machine_id in
-        1) echo "  Frontend:    http://localhost:80" ;;
+        1) echo "  Frontend:      http://localhost:80" ;;
         2) echo "  Load Balancer: http://localhost:8000"
            echo "  Event Monitor: http://localhost:8082"
+           echo "  Circuit Brk:   http://localhost:8084"
            echo "  Redis:         localhost:6379" ;;
-        3) echo "  Usuarios:    http://localhost:8081"
-           echo "  DB Primary:  localhost:3307"
-           echo "  DB Replica1: localhost:3308"
-           echo "  DB Replica2: localhost:3309"
-           echo "  DB Replica3: localhost:3310" ;;
+        3) echo "  Usuarios:      http://localhost:8081"
+           echo "  DB Primary:    localhost:3307"
+           echo "  DB Replica1:   localhost:3308"
+           echo "  DB Replica2:   localhost:3309"
+           echo "  DB Replica3:   localhost:3310" ;;
         4) echo "  Recomendaciones: http://localhost:8091"
-           echo "  DB Primary:  localhost:3311"
-           echo "  DB Replica1: localhost:3312"
-           echo "  DB Replica2: localhost:3313"
-           echo "  DB Replica3: localhost:3314" ;;
-        5) echo "  Pagos:       http://localhost:8083"
-           echo "  DB Primary:  localhost:3315"
-           echo "  DB Replica1: localhost:3316"
-           echo "  DB Replica2: localhost:3317"
-           echo "  DB Replica3: localhost:3318" ;;
+           echo "  DB Primary:    localhost:3311"
+           echo "  DB Replica1:   localhost:3312"
+           echo "  DB Replica2:   localhost:3313"
+           echo "  DB Replica3:   localhost:3314" ;;
+        5) echo "  Pagos:         http://localhost:8083"
+           echo "  DB Primary:    localhost:3315"
+           echo "  DB Replica1:   localhost:3316"
+           echo "  DB Replica2:   localhost:3317"
+           echo "  DB Replica3:   localhost:3318" ;;
     esac
     echo ""
 }

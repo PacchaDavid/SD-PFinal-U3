@@ -136,11 +136,11 @@ class ReplicationApp:
         machine_id = _MACHINE_IDS.get(self.config.service_name, 3)
 
         self.heartbeat = HeartbeatSender(
-            event_monitor_url=self.config.event_monitor_url,
             service_name=self.config.service_name,
             get_stats_fn=lambda: self.wal.get_stats() if self.wal else None,
             machine_id=machine_id,
             interval_seconds=2,
+            redis_client=self.redis_client,
         )
         self.heartbeat.start()
 

@@ -1,30 +1,30 @@
 package com.streaming.recomendaciones.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
 
 import jakarta.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Servicio que envía heartbeats periódicamente vía Redis Pub/Sub.
+ *
+ * Publica en el canal "heartbeats" para que el Event Monitor
+ * los consuma y los reenvíe por WebSocket al panel de administración.
+ */
 @Service
 @EnableScheduling
 public class HeartbeatService {
 
     private static final Logger log = LoggerFactory.getLogger(HeartbeatService.class);
-
-    @Value("${event-monitor.url}")
-    private String eventMonitorUrl;
 
     @Value("${spring.application.name:unknown}")
     private String serviceName;
@@ -32,18 +32,31 @@ public class HeartbeatService {
     @Value("${MACHINE_ID:0}")
     private int machineId;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
     private String nodeId;
     private long startTime;
+
+    public HeartbeatService(RedisTemplate<String, String> redisTemplate) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = new ObjectMapper();
+    }
 
     @PostConstruct
     public void init() {
         this.startTime = System.currentTimeMillis();
         this.nodeId = serviceName + "-" + UUID.randomUUID().toString().substring(0, 8);
+        log.info("HeartbeatService para {} (nodeId={}, redis={})",
+                serviceName, nodeId, redisTemplate != null);
     }
 
     @Scheduled(fixedRateString = "${event-monitor.heartbeat-interval:2000}")
     public void sendHeartbeat() {
+        if (redisTemplate == null) {
+            log.warn("RedisTemplate no disponible, omitiendo heartbeat");
+            return;
+        }
+
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("node_id", nodeId);
@@ -53,15 +66,17 @@ public class HeartbeatService {
             payload.put("status", "active");
             payload.put("timestamp", System.currentTimeMillis() / 1000.0);
             payload.put("uptime_seconds", (System.currentTimeMillis() - startTime) / 1000.0);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            restTemplate.postForEntity(
-                eventMonitorUrl + "/nodes/" + nodeId + "/heartbeat",
-                new HttpEntity<>(payload, headers), String.class);
-        } catch (ResourceAccessException e) {
-            log.debug("Event Monitor no disponible");
+
+            Map<String, Object> metrics = new HashMap<>();
+            metrics.put("service", serviceName);
+            metrics.put("java_version", System.getProperty("java.version"));
+            payload.put("custom_metrics", metrics);
+
+            String json = objectMapper.writeValueAsString(payload);
+            redisTemplate.convertAndSend("heartbeats", json);
+
         } catch (Exception e) {
-            log.error("Error heartbeat: {}", e.getMessage());
+            log.error("Error heartbeat en Redis: {}", e.getMessage());
         }
     }
 }

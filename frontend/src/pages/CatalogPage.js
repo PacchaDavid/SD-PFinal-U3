@@ -159,7 +159,7 @@ export default function CatalogPage() {
                       <CardMedia
                         component="img"
                         className="movie-img"
-                        image={movie.posterUrl || `https://picsum.photos/seed/movie${movie.id}/400/560`}
+                        image={movie.posterUrl || '/boletos.svg'}
                         alt={movie.title}
                         sx={{
                           position: 'absolute', top: 0, left: 0,

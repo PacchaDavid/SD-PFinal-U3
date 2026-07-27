@@ -34,6 +34,7 @@ class ProxyEventType(str, Enum):
     BACKEND_MARKED_UNHEALTHY = "proxy.backend_unhealthy"
     BACKEND_MARKED_HEALTHY = "proxy.backend_healthy"
     BACKEND_MARKED_DEGRADED = "proxy.backend_degraded"
+    REQUEST_REJECTED = "proxy.request_rejected"
     NO_BACKENDS_AVAILABLE = "proxy.no_backends_available"
 
 

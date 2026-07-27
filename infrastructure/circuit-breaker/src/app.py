@@ -117,12 +117,12 @@ class CircuitBreakerApp:
         self.monitor.start()
 
     def _init_heartbeats(self) -> None:
-        """Inicializa el envío de heartbeats al Event Monitor."""
+        """Inicializa el envío de heartbeats vía Redis Pub/Sub."""
         self.heartbeat_sender = HeartbeatSender(
-            event_monitor_url=self.config.event_monitor_url,
             state_machine=self.state_machine,
             machine_id=2,
             interval_seconds=2,
+            redis_client=self.redis_client,
         )
         self.heartbeat_sender.start()
 

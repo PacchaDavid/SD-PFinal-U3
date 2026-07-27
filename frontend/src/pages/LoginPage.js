@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Box, Card, CardContent, TextField, Button, Typography, Link, Alert,
+  Box, Card, CardContent, TextField, Button, Typography, Link, Alert, AlertTitle,
   InputAdornment, IconButton, CircularProgress,
 } from '@mui/material';
-import { Visibility, VisibilityOff, EmailOutlined, LockOutlined } from '@mui/icons-material';
+import { Visibility, VisibilityOff, EmailOutlined, LockOutlined, Warning as WarningIcon } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
@@ -84,8 +84,28 @@ export default function LoginPage() {
 
           {/* Error Alert */}
           {error && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-              {error}
+            <Alert
+              severity={error === 'circuit_breaker_open' ? 'warning' : 'error'}
+              icon={error === 'circuit_breaker_open' ? <WarningIcon /> : undefined}
+              sx={{
+                mb: 2, borderRadius: 2,
+                ...(error === 'circuit_breaker_open' ? {
+                  bgcolor: 'rgba(237,173,18,0.08)',
+                  border: '1px solid',
+                  borderColor: 'warning.main',
+                } : {}),
+              }}
+            >
+              {error === 'circuit_breaker_open' ? (
+                <>
+                  <AlertTitle sx={{ fontWeight: 700, mb: 0.5, fontSize: '0.9rem' }}>
+                    Servicio de autenticación no disponible
+                  </AlertTitle>
+                  El sistema de inicio de sesión está temporalmente fuera de servicio.
+                  El equipo técnico está trabajando para restaurarlo lo antes posible.
+                  Por favor, intenta de nuevo en unos minutos.
+                </>
+              ) : error}
             </Alert>
           )}
 

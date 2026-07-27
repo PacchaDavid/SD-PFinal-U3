@@ -34,7 +34,8 @@ export default function LogsPage() {
 
       const res = await fetch(`${config.EVENT_MONITOR_URL}/events?${params}`);
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
+      // Handle both array format and { events: [...] } object format
+      const list = Array.isArray(data) ? data : (Array.isArray(data.events) ? data.events : []);
       setLogs(list);
       logsRef.current = list;
     } catch {

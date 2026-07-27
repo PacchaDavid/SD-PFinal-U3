@@ -74,6 +74,8 @@ class DatabaseManager:
                         self._primary_config["host"],
                         self._primary_config["port"],
                         self._primary_config["database"])
+            # Sincronizar schema a réplicas
+            self._ensure_schema_on_replicas()
             return True
         except pymysql.Error as e:
             logger.error("Error conectando a primary DB: %s", e)
@@ -184,6 +186,64 @@ class DatabaseManager:
                 return cursor.fetchall()
         except pymysql.Error:
             return []
+
+    # ------------------------------------------------------------------
+    # Schema Sync
+    # ------------------------------------------------------------------
+
+    def _ensure_schema_on_replicas(self) -> None:
+        """Sincroniza el schema (tablas) desde la primaria a las réplicas.
+
+        Obtiene la definición DDL de cada tabla en la primaria via
+        SHOW CREATE TABLE y la ejecuta en cada réplica.
+        """
+        # Obtener tablas de la primaria
+        tables = []
+        try:
+            with self._primary_conn.cursor() as cursor:
+                cursor.execute("SHOW TABLES")
+                rows = cursor.fetchall()
+                # El nombre del campo depende del driver
+                tables = [list(row.values())[0] for row in rows]
+        except Exception as e:
+            logger.warning("Error obteniendo tablas de primaria: %s", e)
+            return
+
+        if not tables:
+            logger.debug("No hay tablas que sincronizar")
+            return
+
+        logger.info("Sincronizando schema de %d tablas a réplicas...", len(tables))
+
+        for replica_id in self._replica_states:
+            state = self._replica_states[replica_id]
+            try:
+                conn = pymysql.connect(
+                    host=state.host, port=state.port,
+                    user=state.user, password=state.password,
+                    database=state.database,
+                    connect_timeout=5,
+                )
+                with conn.cursor() as cursor:
+                    for table_name in tables:
+                        # Obtener CREATE TABLE de la primaria
+                        with self._primary_conn.cursor() as pc:
+                            pc.execute(f"SHOW CREATE TABLE `{table_name}`")
+                            create_stmt = list(pc.fetchone().values())[1]
+
+                        # Ejecutar en réplica (IF NOT EXISTS incluido)
+                        cursor.execute(create_stmt)
+                        conn.commit()
+                        logger.debug("Tabla '%s' creada/actualizada en réplica %d",
+                                     table_name, replica_id)
+
+                conn.close()
+                logger.info("Schema sincronizado en réplica %d (%d tablas)",
+                            replica_id, len(tables))
+
+            except pymysql.Error as e:
+                logger.warning("Error sincronizando schema en réplica %d: %s",
+                               replica_id, e)
 
     # ------------------------------------------------------------------
     # Réplicas

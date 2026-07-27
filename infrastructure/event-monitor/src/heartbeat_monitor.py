@@ -50,10 +50,16 @@ class HeartbeatMonitor:
     # ------------------------------------------------------------------
 
     def register_node(self, heartbeat: HeartbeatData) -> NodeInfo:
-        """Registra o actualiza un nodo a partir de un heartbeat."""
+        """Registra o actualiza un nodo a partir de un heartbeat.
+
+        Primero busca por node_id. Si no lo encuentra, busca un nodo INACTIVE
+        con el mismo node_name + service_name para "resucitarlo" (evita
+        duplicados cuando un contenedor se reinicia y obtiene un nuevo node_id).
+        """
         with self._lock:
             if heartbeat.node_id in self._nodes:
                 node = self._nodes[heartbeat.node_id]
+                was_inactive = node.status == NodeStatus.INACTIVE
                 node.last_heartbeat = heartbeat.timestamp
                 node.heartbeat_count += 1
                 node.missed_heartbeats = 0
@@ -61,31 +67,92 @@ class HeartbeatMonitor:
                 node.cpu_percent = heartbeat.cpu_percent
                 node.memory_percent = heartbeat.memory_percent
                 node.uptime_seconds = heartbeat.uptime_seconds
+
+                if was_inactive:
+                    logger.info(
+                        "Nodo REACTIVADO (mismo node_id): %s (%s)",
+                        node.node_name, node.service_name,
+                    )
             else:
-                node = NodeInfo(
-                    node_id=heartbeat.node_id,
-                    node_name=heartbeat.node_name,
-                    service_name=heartbeat.service_name,
-                    machine_id=heartbeat.machine_id,
-                    status=NodeStatus.ACTIVE,
-                    last_heartbeat=heartbeat.timestamp,
-                    heartbeat_count=1,
-                    missed_heartbeats=0,
-                    cpu_percent=heartbeat.cpu_percent,
-                    memory_percent=heartbeat.memory_percent,
-                    uptime_seconds=heartbeat.uptime_seconds,
-                )
-                self._nodes[heartbeat.node_id] = node
-                self._emit_event(
-                    EventType.NODE_REGISTERED,
-                    source="heartbeat-monitor",
-                    node_id=node.node_id,
-                    message=f"Nodo registrado: {node.node_name} ({node.service_name})",
-                    metadata=node.to_dict(),
-                )
+                # Buscar nodo INACTIVE con mismo node_name + service_name
+                existing = self._find_inactive_by_name(heartbeat.node_name, heartbeat.service_name)
+                if existing is not None:
+                    # Resucitar nodo existente: actualizar node_id y reactivar
+                    old_id = existing.node_id
+                    node = existing
+                    node.node_id = heartbeat.node_id
+                    node.last_heartbeat = heartbeat.timestamp
+                    node.heartbeat_count += 1
+                    node.missed_heartbeats = 0
+                    node.status = NodeStatus.ACTIVE
+                    node.cpu_percent = heartbeat.cpu_percent
+                    node.memory_percent = heartbeat.memory_percent
+                    node.uptime_seconds = heartbeat.uptime_seconds
+                    node.machine_id = heartbeat.machine_id
+
+                    # Transferir a la nueva clave y eliminar la vieja
+                    self._nodes[heartbeat.node_id] = node
+                    if old_id in self._nodes and old_id != heartbeat.node_id:
+                        del self._nodes[old_id]
+
+                    logger.info(
+                        "Nodo REACTIVADO (nuevo node_id): %s (%s) - "
+                        "node_id %s → %s",
+                        node.node_name, node.service_name,
+                        old_id, heartbeat.node_id,
+                    )
+                    self._emit_event(
+                        EventType.NODE_STATUS_CHANGE,
+                        source="heartbeat-monitor",
+                        node_id=heartbeat.node_id,
+                        message=(
+                            f"Nodo {node.node_name} ({node.service_name}) "
+                            f"reactivado con nuevo node_id tras reinicio"
+                        ),
+                        severity="info",
+                        metadata={
+                            "old_node_id": old_id,
+                            "new_node_id": heartbeat.node_id,
+                        },
+                    )
+                else:
+                    node = NodeInfo(
+                        node_id=heartbeat.node_id,
+                        node_name=heartbeat.node_name,
+                        service_name=heartbeat.service_name,
+                        machine_id=heartbeat.machine_id,
+                        status=NodeStatus.ACTIVE,
+                        last_heartbeat=heartbeat.timestamp,
+                        heartbeat_count=1,
+                        missed_heartbeats=0,
+                        cpu_percent=heartbeat.cpu_percent,
+                        memory_percent=heartbeat.memory_percent,
+                        uptime_seconds=heartbeat.uptime_seconds,
+                    )
+                    self._nodes[heartbeat.node_id] = node
+                    self._emit_event(
+                        EventType.NODE_REGISTERED,
+                        source="heartbeat-monitor",
+                        node_id=node.node_id,
+                        message=f"Nodo registrado: {node.node_name} ({node.service_name})",
+                        metadata=node.to_dict(),
+                    )
 
             self._total_heartbeats += 1
             return node
+
+    def _find_inactive_by_name(self, node_name: str, service_name: str) -> NodeInfo | None:
+        """Busca un nodo INACTIVE que coincida con node_name y service_name.
+
+        Útil cuando un nodo se reinicia y obtiene un nuevo node_id (por ej.
+        cambio de hostname en Docker). Así evitamos duplicados.
+        """
+        for node in self._nodes.values():
+            if (node.status == NodeStatus.INACTIVE
+                    and node.node_name == node_name
+                    and node.service_name == service_name):
+                return node
+        return None
 
     def process_heartbeat(self, data: dict) -> NodeInfo | None:
         """Procesa un heartbeat proveniente de Redis Pub/Sub.

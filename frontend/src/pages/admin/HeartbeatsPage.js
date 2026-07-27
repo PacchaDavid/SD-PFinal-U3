@@ -19,7 +19,23 @@ export default function HeartbeatsPage() {
     try {
       const res = await fetch(`${config.EVENT_MONITOR_URL}/nodes`);
       const data = await res.json();
-      const nodeList = Array.isArray(data) ? data : [];
+      // Handle both array format and { nodes: [...] } object format
+      const rawNodes = Array.isArray(data) ? data : (Array.isArray(data.nodes) ? data.nodes : []);
+      // Mapear snake_case del HeartbeatMonitor a camelCase del frontend
+      const nodeList = rawNodes.map(n => ({
+        nodeId: n.node_id || n.nodeId,
+        name: n.node_name || n.name || n.nodeName,
+        nodeName: n.node_name || n.nodeName,
+        serviceName: n.service_name || n.serviceName,
+        machineId: n.machine_id ?? n.machineId,
+        status: n.status || 'active',
+        lastHeartbeat: n.last_heartbeat || n.lastHeartbeat,
+        latency: n.latency,
+        type: n.type,
+        id: n.id,
+        node_id: n.node_id,
+        service_name: n.service_name,
+      }));
       setNodes(nodeList);
       nodesRef.current = nodeList;
     } catch {

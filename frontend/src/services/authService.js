@@ -6,7 +6,12 @@ const authService = {
       const response = await api.post('/api/usuarios/api/auth/login', { email, password });
       return response.data;
     } catch (error) {
-      const message = error.response?.data?.error || 'Error al iniciar sesión';
+      const data = error.response?.data || {};
+      // Detectar fallback del Circuit Breaker
+      if (data.cb_fallback) {
+        throw new Error('circuit_breaker_open');
+      }
+      const message = data.error || 'Error al iniciar sesión';
       throw new Error(message);
     }
   },
@@ -16,7 +21,11 @@ const authService = {
       const response = await api.post('/api/usuarios/api/auth/register', data);
       return response.data;
     } catch (error) {
-      const message = error.response?.data?.error || 'Error al registrarse';
+      const data2 = error.response?.data || {};
+      if (data2.cb_fallback) {
+        throw new Error('circuit_breaker_open');
+      }
+      const message = data2.error || 'Error al registrarse';
       throw new Error(message);
     }
   },

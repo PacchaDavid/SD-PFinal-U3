@@ -62,6 +62,10 @@ class Config:
                 "health_check_interval_seconds": 10,
                 "unhealthy_threshold": 3,
             },
+            "circuit_breaker": {
+                "url": "http://circuit-breaker:8084",
+                "timeout_ms": 2000,
+            },
             "redis": {
                 "host": "redis",
                 "port": 6379,
@@ -157,6 +161,14 @@ class Config:
     @property
     def unhealthy_threshold(self) -> int:
         return self._data["balancing"]["unhealthy_threshold"]
+
+    @property
+    def circuit_breaker_url(self) -> str:
+        return self._data["circuit_breaker"]["url"]
+
+    @property
+    def circuit_breaker_timeout(self) -> int:
+        return self._data["circuit_breaker"]["timeout_ms"]
 
     @property
     def redis_host(self) -> str:

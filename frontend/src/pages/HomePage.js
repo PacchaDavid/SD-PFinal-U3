@@ -22,17 +22,29 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [heroMovie, setHeroMovie] = useState(null);
 
+  /**
+   * Extrae un array de películas compatible con respuesta normal (array)
+   * y con cb_fallback ({ items, cb_fallback, message }).
+   */
+  const extractMovies = (data) => {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.items)) return data.items;
+    return [];
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
         const feat = await moviesService.getFeatured();
-        setFeatured(feat);
-        if (feat.length > 0) setHeroMovie(feat[0]);
+        const featMovies = extractMovies(feat);
+        setFeatured(featMovies);
+        if (featMovies.length > 0) setHeroMovie(featMovies[0]);
 
         const genreResults = {};
         for (const genre of FEATURED_GENRES) {
-          const movies = await moviesService.getByGenre(genre);
+          const data = await moviesService.getByGenre(genre);
+          const movies = extractMovies(data);
           if (movies.length > 0) genreResults[genre] = movies;
         }
         setByGenre(genreResults);
@@ -88,7 +100,7 @@ export default function HomePage() {
           <CardMedia
             component="img"
             height="100%"
-            image={heroMovie.posterUrl || `https://picsum.photos/seed/${heroMovie.id}/1200/600`}
+            image={heroMovie.posterUrl || '/boletos.svg'}
             alt={heroMovie.title}
             sx={{ objectFit: 'cover' }}
           />

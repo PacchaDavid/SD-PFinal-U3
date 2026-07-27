@@ -1,15 +1,16 @@
 # =============================================================================
 # Heartbeat Sender - Circuit Breaker
 # =============================================================================
-# Envía heartbeats periódicos al Event Monitor con el estado
-# de todos los circuit breakers.
+# Envía heartbeats periódicos al Event Monitor vía Redis Pub/Sub
+# (canal "heartbeats") con el estado de todos los circuit breakers.
 # =============================================================================
 
+import json
 import logging
 import time
 import threading
 
-import requests
+import redis as redis_lib
 
 from src.circuit import CircuitBreakerStateMachine
 
@@ -17,19 +18,19 @@ logger = logging.getLogger("circuit-breaker.heartbeat")
 
 
 class HeartbeatSender:
-    """Envía heartbeats al Event Monitor a intervalos regulares."""
+    """Envía heartbeats al Event Monitor a intervalos regulares vía Redis Pub/Sub."""
 
     def __init__(
         self,
-        event_monitor_url: str,
         state_machine: CircuitBreakerStateMachine,
         machine_id: int = 2,
         interval_seconds: int = 2,
+        redis_client: redis_lib.Redis | None = None,
     ):
-        self._event_monitor_url = event_monitor_url.rstrip("/")
         self._state_machine = state_machine
         self._machine_id = machine_id
         self._interval = interval_seconds
+        self._redis_client = redis_client
 
         self._running = False
         self._thread: threading.Thread | None = None
@@ -46,8 +47,9 @@ class HeartbeatSender:
         )
         self._thread.start()
         logger.info(
-            "HeartbeatSender iniciado (intervalo=%ds, destino=%s)",
-            self._interval, self._event_monitor_url,
+            "HeartbeatSender iniciado (intervalo=%ds, redis=%s)",
+            self._interval,
+            self._redis_client is not None,
         )
 
     def stop(self) -> None:
@@ -63,11 +65,14 @@ class HeartbeatSender:
             time.sleep(self._interval)
 
     def _send_heartbeat(self) -> bool:
-        """Envía heartbeat con métricas de los circuit breakers."""
+        """Publica un heartbeat en Redis Pub/Sub (canal 'heartbeats')."""
+        if not self._redis_client:
+            logger.warning("Redis no disponible para heartbeat")
+            return False
+
         stats = self._state_machine.get_stats()
         circuits = stats.get("circuits", [])
 
-        # Construir métricas personalizadas
         open_services = [
             c["service_name"] for c in circuits if c.get("is_open")
         ]
@@ -97,20 +102,11 @@ class HeartbeatSender:
         }
 
         try:
-            resp = requests.post(
-                f"{self._event_monitor_url}/nodes/circuit-breaker/heartbeat",
-                json=payload,
-                timeout=3,
-            )
+            self._redis_client.publish("heartbeats", json.dumps(payload, default=str))
             self._sent_count += 1
-            return resp.status_code < 500
-        except requests.ConnectionError:
-            logger.warning("Event Monitor no disponible: %s", self._event_monitor_url)
-            return False
-        except requests.Timeout:
-            return False
+            return True
         except Exception as e:
-            logger.error("Error en heartbeat: %s", e)
+            logger.error("Error publicando heartbeat en Redis: %s", e)
             return False
 
     @property

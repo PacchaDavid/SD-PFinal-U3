@@ -9,6 +9,7 @@ import json
 import logging
 import time
 
+import redis as redis_lib
 from flask import Flask, request, Response
 from flask_cors import CORS
 
@@ -56,6 +57,7 @@ class LoadBalancerApp:
         self.strategy: BalanceStrategy | None = None
         self.proxy: ProxyHandler | None = None
         self.heartbeat_sender: HeartbeatSender | None = None
+        self.redis_client: redis_lib.Redis | None = None
         self.flask_app: Flask | None = None
 
     def _setup_logging(self) -> None:
@@ -74,6 +76,7 @@ class LoadBalancerApp:
         # Inicializar componentes
         self._init_services()
         self._init_proxy()
+        self._init_redis()
         self._init_health_checks()
         self._init_heartbeats()
         self._register_blueprints(app)
@@ -103,6 +106,8 @@ class LoadBalancerApp:
             registry=self.registry,
             strategy=self.strategy,
             default_timeout_ms=5000,
+            circuit_breaker_url=self.config.circuit_breaker_url,
+            circuit_breaker_timeout=self.config.circuit_breaker_timeout,
             on_event=self._on_event,
         )
 
@@ -116,13 +121,29 @@ class LoadBalancerApp:
         )
         self.health_checker.start()
 
+    def _init_redis(self) -> None:
+        """Inicializa conexión Redis (no crítica si falla)."""
+        if self.config.redis_enabled:
+            try:
+                self.redis_client = redis_lib.Redis(
+                    host=self.config.redis_host,
+                    port=self.config.redis_port,
+                    decode_responses=True,
+                    socket_connect_timeout=3,
+                )
+                self.redis_client.ping()
+                logger.info("Redis conectado en %s:%s", self.config.redis_host, self.config.redis_port)
+            except Exception as e:
+                logger.warning("Redis no disponible: %s", e)
+                self.redis_client = None
+
     def _init_heartbeats(self) -> None:
-        """Inicializa el envío de heartbeats al Event Monitor."""
+        """Inicializa el envío de heartbeats vía Redis Pub/Sub."""
         self.heartbeat_sender = HeartbeatSender(
-            event_monitor_url=self.config.event_monitor_url,
             machine_id=2,
             interval_seconds=2,
             get_stats_fn=lambda: self.registry.get_stats().to_dict(),
+            redis_client=self.redis_client,
         )
         self.heartbeat_sender.start()
 

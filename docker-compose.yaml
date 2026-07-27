@@ -49,6 +49,7 @@ services:
       args:
         REACT_APP_API_HOST: ${REACT_APP_API_HOST:-${MACHINE2_IP:-localhost}}
         REACT_APP_EVENT_MONITOR_HOST: ${REACT_APP_EVENT_MONITOR_HOST:-${MACHINE2_IP:-localhost}}
+        REACT_APP_CIRCUIT_BREAKER_HOST: ${REACT_APP_CIRCUIT_BREAKER_HOST:-${MACHINE2_IP:-localhost}}
     container_name: streaming-frontend
     ports:
       - "80:80"
@@ -80,6 +81,7 @@ services:
       - "8082:8082"
     environment:
       - COMPONENT=event-monitor
+      - HOST=0.0.0.0
       - PORT=8082
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=6379
@@ -107,13 +109,45 @@ services:
       - redis-data:/data
     networks:
       - streaming-net
-    command: redis-server --appendonly yes --loglevel notice
+    command: redis-server --appendonly yes --loglevel notice --bind 0.0.0.0
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+
+  circuit-breaker:
+    profiles: ["machine2"]
+    build:
+      context: .
+      dockerfile: docker/infrastructure.Dockerfile
+      args:
+        COMPONENT: circuit-breaker
+        PORT: 8084
+    container_name: streaming-circuit-breaker
+    ports:
+      - "8084:8084"
+    environment:
+      - COMPONENT=circuit-breaker
+      - HOST=0.0.0.0
+      - PORT=8084
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=6379
+      - EVENT_MONITOR_URL=${EVENT_MONITOR_URL:-http://event-monitor:8082}
+      - MACHINE_ID=2
+      - LOG_LEVEL=INFO
+    networks:
+      - streaming-net
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   load-balancer:
     profiles: ["machine2"]
@@ -128,6 +162,7 @@ services:
       - "8000:8000"
     environment:
       - COMPONENT=load-balancer
+      - HOST=0.0.0.0
       - PORT=8000
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=6379
@@ -325,6 +360,7 @@ services:
       - "8090:8090"
     environment:
       - COMPONENT=replication
+      - HOST=0.0.0.0
       - PORT=8090
       - SERVICE_NAME=usuarios
       - DB_PRIMARY_HOST=usuarios-db-primary
@@ -525,6 +561,7 @@ services:
       - "8093:8090"
     environment:
       - COMPONENT=replication
+      - HOST=0.0.0.0
       - PORT=8090
       - SERVICE_NAME=recomendaciones
       - DB_PRIMARY_HOST=recomendaciones-db-primary
@@ -725,6 +762,7 @@ services:
       - "8092:8090"
     environment:
       - COMPONENT=replication
+      - HOST=0.0.0.0
       - PORT=8090
       - SERVICE_NAME=pagos
       - DB_PRIMARY_HOST=pagos-db-primary

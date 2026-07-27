@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="ticketGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560"/>
+      <stop offset="100%" style="stop-color:#ff6b6b"/>
+    </linearGradient>
+    <linearGradient id="ticketGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460"/>
+      <stop offset="100%" style="stop-color:#533483"/>
+    </linearGradient>
+    <linearGradient id="ticketGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9a826"/>
+      <stop offset="100%" style="stop-color:#f6c90e"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="ticketClip1">
+      <rect x="40" y="60" width="500" height="90" rx="10"/>
+    </clipPath>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="600" height="400" fill="url(#bgGrad)"/>
+
+  <!-- Estrellas decorativas -->
+  <circle cx="50" cy="30" r="1.5" fill="white" opacity="0.6"/>
+  <circle cx="120" cy="50" r="1" fill="white" opacity="0.4"/>
+  <circle cx="200" cy="20" r="2" fill="white" opacity="0.5"/>
+  <circle cx="350" cy="35" r="1.5" fill="white" opacity="0.3"/>
+  <circle cx="480" cy="25" r="1" fill="white" opacity="0.6"/>
+  <circle cx="550" cy="45" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="30" cy="370" r="1" fill="white" opacity="0.3"/>
+  <circle cx="570" cy="380" r="1.5" fill="white" opacity="0.5"/>
+
+  <!-- Título -->
+  <text x="300" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#f5c842" letter-spacing="4" filter="url(#glow)">CINEMAS</text>
+
+  <!-- BOLETO 1 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="60" width="500" height="90" rx="10" fill="url(#ticketGrad1)"/>
+    <!-- Línea de corte punteada -->
+    <line x1="250" y1="60" x2="250" y2="150" stroke="white" stroke-width="1.5" stroke-dasharray="6,6" opacity="0.5"/>
+    <!-- Muescas laterales (efecto de boleto) -->
+    <circle cx="40" cy="105" r="8" fill="url(#bgGrad)"/>
+    <circle cx="540" cy="105" r="8" fill="url(#bgGrad)"/>
+    <!-- Contenido -->
+    <text x="145" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="white">AVATAR 3</text>
+    <text x="145" y="118" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white" opacity="0.85">Sala 5 | 20:30 hrs | 3D</text>
+    <text x="145" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white" opacity="0.6">26/07/2026 • Butaca A-12</text>
+
+    <text x="375" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">$12.50</text>
+    <text x="375" y="118" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white" opacity="0.7">ENTRADA</text>
+    <!-- Código de barras simulado -->
+    <g transform="translate(430, 75)">
+      <rect x="0" y="0" width="2" height="35" fill="white" opacity="0.7"/>
+      <rect x="4" y="0" width="1" height="35" fill="white" opacity="0.7"/>
+      <rect x="7" y="0" width="3" height="35" fill="white" opacity="0.7"/>
+      <rect x="12" y="0" width="1" height="35" fill="white" opacity="0.7"/>
+      <rect x="15" y="0" width="2" height="35" fill="white" opacity="0.7"/>
+      <rect x="19" y="0" width="3" height="35" fill="white" opacity="0.7"/>
+      <rect x="24" y="0" width="1" height="35" fill="white" opacity="0.7"/>
+      <rect x="27" y="0" width="2" height="35" fill="white" opacity="0.7"/>
+      <rect x="31" y="0" width="1" height="35" fill="white" opacity="0.7"/>
+      <rect x="34" y="0" width="3" height="35" fill="white" opacity="0.7"/>
+      <rect x="39" y="0" width="2" height="35" fill="white" opacity="0.7"/>
+      <rect x="43" y="0" width="1" height="35" fill="white" opacity="0.7"/>
+      <rect x="46" y="0" width="2" height="35" fill="white" opacity="0.7"/>
+    </g>
+  </g>
+
+  <!-- BOLETO 2 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="170" width="500" height="90" rx="10" fill="url(#ticketGrad2)"/>
+    <line x1="250" y1="170" x2="250" y2="260" stroke="white" stroke-width="1.5" stroke-dasharray="6,6" opacity="0.4"/>
+    <circle cx="40" cy="215" r="8" fill="url(#bgGrad)"/>
+    <circle cx="540" cy="215" r="8" fill="url(#bgGrad)"/>
+
+    <text x="145" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#f5c842">DUNE 2</text>
+    <text x="145" y="228" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white" opacity="0.85">Sala 2 | 18:00 hrs | IMAX</text>
+    <text x="145" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white" opacity="0.6">26/07/2026 • Butaca C-07</text>
+
+    <text x="375" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#f5c842">$15.00</text>
+    <text x="375" y="228" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white" opacity="0.7">ENTRADA</text>
+    <g transform="translate(430, 185)">
+      <rect x="0" y="0" width="1" height="35" fill="white" opacity="0.6"/>
+      <rect x="3" y="0" width="3" height="35" fill="white" opacity="0.6"/>
+      <rect x="8" y="0" width="1" height="35" fill="white" opacity="0.6"/>
+      <rect x="11" y="0" width="2" height="35" fill="white" opacity="0.6"/>
+      <rect x="15" y="0" width="3" height="35" fill="white" opacity="0.6"/>
+      <rect x="20" y="0" width="1" height="35" fill="white" opacity="0.6"/>
+      <rect x="23" y="0" width="2" height="35" fill="white" opacity="0.6"/>
+      <rect x="27" y="0" width="3" height="35" fill="white" opacity="0.6"/>
+      <rect x="32" y="0" width="1" height="35" fill="white" opacity="0.6"/>
+      <rect x="35" y="0" width="2" height="35" fill="white" opacity="0.6"/>
+      <rect x="39" y="0" width="3" height="35" fill="white" opacity="0.6"/>
+      <rect x="44" y="0" width="1" height="35" fill="white" opacity="0.6"/>
+    </g>
+  </g>
+
+  <!-- BOLETO 3 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="280" width="500" height="90" rx="10" fill="url(#ticketGrad3)"/>
+    <line x1="250" y1="280" x2="250" y2="370" stroke="#333" stroke-width="1.5" stroke-dasharray="6,6" opacity="0.4"/>
+    <circle cx="40" cy="325" r="8" fill="url(#bgGrad)"/>
+    <circle cx="540" cy="325" r="8" fill="url(#bgGrad)"/>
+
+    <text x="145" y="315" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#1a1a2e">OPPENHEIMER</text>
+    <text x="145" y="338" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#1a1a2e" opacity="0.8">Sala 1 | 22:15 hrs | 70mm</text>
+    <text x="145" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#1a1a2e" opacity="0.6">26/07/2026 • Butaca B-04</text>
+
+    <text x="375" y="315" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1a1a2e">$14.00</text>
+    <text x="375" y="338" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#1a1a2e" opacity="0.7">ENTRADA</text>
+    <g transform="translate(430, 295)">
+      <rect x="0" y="0" width="2" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="4" y="0" width="1" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="7" y="0" width="3" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="12" y="0" width="1" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="15" y="0" width="2" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="19" y="0" width="3" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="24" y="0" width="1" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="27" y="0" width="2" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="31" y="0" width="3" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="36" y="0" width="1" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="39" y="0" width="2" height="35" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="43" y="0" width="3" height="35" fill="#1a1a2e" opacity="0.6"/>
+    </g>
+  </g>
+</svg>

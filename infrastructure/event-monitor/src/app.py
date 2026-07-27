@@ -136,6 +136,10 @@ class EventMonitorApp:
                 self.config.redis_channels.get("circuit_breaker", "circuit-breaker"),
                 self._on_circuit_message,
             )
+            self.redis_client.subscribe(
+                self.config.redis_channels.get("replication", "replication"),
+                self._on_replication_message,
+            )
             self.redis_client.start_listener()
             logger.info("Redis conectado y listener Pub/Sub activo")
         else:
@@ -278,6 +282,31 @@ class EventMonitorApp:
         }
         if self.ws_handler:
             self.ws_handler.broadcast_circuit_change(data)
+
+    def _on_replication_message(self, data: dict) -> None:
+        """Procesa eventos de replicación recibidos de Redis Pub/Sub.
+
+        Los Replication Managers publican ACKs y estados en el canal
+        "replication". Este handler los reenvía al frontend vía
+        WebSocket para visualización en tiempo real.
+        """
+        if self.ws_handler:
+            self.ws_handler.broadcast_replication_event(data)        
+        
+        # También registrar como evento interno si es relevante
+        if data.get("type") in ("replication.replicated", "replication.failed"):
+            event = SystemEvent(
+                type=data.get("type", "replication.event"),
+                source=data.get("service", "replication"),
+                node_id=data.get("node_id", ""),
+                message=data.get("message", "Evento de replicación"),
+                severity=data.get("severity", "info"),
+                timestamp=data.get("timestamp", time.time()),
+                metadata=data,
+            )
+            self._events.append(event)
+            if len(self._events) > self.config.max_events:
+                self._events = self._events[-self.config.max_events:]
 
     def _on_node_status_change(self, node_id: str, old_status, new_status) -> None:
         """Callback cuando un nodo cambia de estado."""

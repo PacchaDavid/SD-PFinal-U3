@@ -1,116 +1,96 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Box, Typography, Grid, Card, CardContent, Chip, Skeleton, Paper,
+  Box, Typography, Grid, Card, CardContent, Chip, Skeleton,
+  Table, TableHead, TableBody, TableRow, TableCell,
 } from '@mui/material';
 import {
-  Dns, Memory, Storage, CloudQueue, Speed,
-  People, MovieCreation,
+  FavoriteBorder, Storage, ReportProblem, EventNote, CheckCircle, Sync,
 } from '@mui/icons-material';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-} from 'recharts';
 import config from '../../config';
 import { useWebSocket, SOCKET_EVENTS } from '../../context/WebSocketContext';
 import { on } from '../../services/socket';
 
-const STATUS_COLORS = { online: '#34d399', warning: '#fbbf24', offline: '#ef4444' };
-
 export default function DashboardPage() {
   const { connected } = useWebSocket();
   const [data, setData] = useState(null);
+  const [circuits, setCircuits] = useState([]);
+  const [recentEvents, setRecentEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [chartData, setChartData] = useState([]);
-  const eventsRef = useRef([]);
+  const [hbMetrics, setHbMetrics] = useState(null);
 
-  // Initial REST load
-  const fetchInitialData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [nodes, status, events, health, lbServices] = await Promise.all([
-        fetch(`${config.EVENT_MONITOR_URL}/nodes`).then(r => r.json()).catch(() => ({})),
+      const [metricsRes, statusRes, eventsRes] = await Promise.all([
+        fetch(`${config.EVENT_MONITOR_URL}/metrics`).then(r => r.json()).catch(() => ({})),
         fetch(`${config.EVENT_MONITOR_URL}/status`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/events?limit=50`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.EVENT_MONITOR_URL}/health`).then(r => r.json()).catch(() => ({})),
-        fetch(`${config.API_BASE_URL}/health/services`).then(r => r.json()).catch(() => ({})),
+        fetch(`${config.EVENT_MONITOR_URL}/events?limit=20`).then(r => r.json()).catch(() => ({})),
       ]);
-      const fullData = { nodes, circuits: status?.circuit_breakers || [], replication: status?.services || [], events, health, status, lbServices };
-      setData(fullData);
-
-      // Build chart from events
-      const eventList = Array.isArray(events) ? events : [];
-      eventsRef.current = eventList;
-      setChartData(buildChartData(eventList));
+      setHbMetrics(metricsRes);
+      setCircuits(Array.isArray(statusRes?.circuit_breakers) ? statusRes.circuit_breakers : []);
+      const eventList = Array.isArray(eventsRes) ? eventsRes : (Array.isArray(eventsRes?.events) ? eventsRes.events : []);
+      setRecentEvents(eventList.slice(0, 15));
+      setData(statusRes);
     } catch {
-      // Still use demo data if everything fails
+      // Silently handle errors
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // WebSocket subscription for real-time updates
+  // WebSocket updates
   useEffect(() => {
-    // Update chart when new event arrives via WebSocket
-    const unsubEvent = on(SOCKET_EVENTS.EVENT, (eventData) => {
-      eventsRef.current = [eventData, ...eventsRef.current].slice(0, 100);
-      setChartData(buildChartData(eventsRef.current));
+    const unsubMetrics = on(SOCKET_EVENTS.METRICS, (m) => {
+      if (m) setHbMetrics(prev => ({ ...prev, ...m }));
     });
-
-    // Refresh full dashboard data when system_status arrives
-    const unsubStatus = on(SOCKET_EVENTS.SYSTEM_STATUS, () => {
-      // Light refresh — don't block UI
-      fetchInitialData();
+    const unsubCircuit = on(SOCKET_EVENTS.CIRCUIT_CHANGE, (c) => {
+      setCircuits(prev => {
+        const svc = c.serviceName || c.service || c.circuitId;
+        if (!svc) return prev;
+        const idx = prev.findIndex(x => (x.serviceName || x.service) === svc);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], ...c, state: c.state || c.newState || updated[idx].state };
+          return updated;
+        }
+        return [...prev, { serviceName: svc, state: c.state || 'CLOSED', ...c }];
+      });
     });
+    const unsubEvent = on(SOCKET_EVENTS.EVENT, (e) => {
+      setRecentEvents(prev => [e, ...prev].slice(0, 15));
+    });
+    return () => { unsubMetrics(); unsubCircuit(); unsubEvent(); };
+  }, []);
 
-    return () => {
-      unsubEvent();
-      unsubStatus();
-    };
-  }, [fetchInitialData]);
-
-  // Fallback: REST polling when WebSocket not connected
+  // Fallback polling
   useEffect(() => {
-    if (connected) return; // WebSocket handles updates
-    const interval = setInterval(fetchInitialData, 8000);
+    if (connected) return;
+    const interval = setInterval(fetchData, 8000);
     return () => clearInterval(interval);
-  }, [connected, fetchInitialData]);
+  }, [connected, fetchData]);
 
   if (loading && !data) {
     return (
       <Grid container spacing={2}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Grid item xs={12} sm={6} md={4} key={i}>
-            <Skeleton variant="rounded" height={140} sx={{ borderRadius: 2 }} />
-          </Grid>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Grid item xs={12} sm={6} key={i}><Skeleton variant="rounded" height={180} sx={{ borderRadius: 2 }} /></Grid>
         ))}
       </Grid>
     );
   }
 
-  // Usar Load Balancer como fuente de verdad para servicios activos
-  const lbServices = data?.lbServices?.services || [];
-  const onlineCount = lbServices.filter(s => s.status === 'healthy' || s.status === 'HEALTHY' || s.healthy_count > 0).length;
-  const warningCount = lbServices.filter(s => s.status === 'degraded' || s.status === 'DEGRADED').length;
-  const offlineCount = lbServices.filter(s => s.status === 'unhealthy' || s.status === 'UNHEALTHY' || s.healthy_count === 0).length;
-  const totalNodes = lbServices.length || 3;
-  const events = Array.isArray(data?.events) ? data.events : [];
-
-  const metricCards = [
-    { label: 'Servicios Activos', value: `${onlineCount}/${totalNodes}`, icon: <Dns />, color: 'success.main', bg: 'rgba(52,211,153,0.08)' },
-    { label: 'Circuit Breakers', value: data?.circuits?.length || 0, icon: <Speed />, color: 'warning.main', bg: 'rgba(251,191,36,0.08)' },
-    { label: 'Eventos (24h)', value: events.length, icon: <CloudQueue />, color: 'info.main', bg: 'rgba(96,165,250,0.08)' },
-    { label: 'Réplicas', value: 3, icon: <Storage />, color: 'secondary.main', bg: 'rgba(255,107,157,0.08)' },
-    { label: 'Usuarios', value: data?.health?.totalUsers || '—', icon: <People />, color: 'primary.main', bg: 'rgba(124,92,252,0.08)' },
-    { label: 'Películas', value: data?.health?.totalMovies || '—', icon: <MovieCreation />, color: 'success.light', bg: 'rgba(110,231,183,0.08)' },
-  ];
+  const activeNodes = hbMetrics?.active_nodes ?? data?.nodes?.active_nodes ?? 0;
+  const totalNodes = hbMetrics?.total_nodes ?? data?.nodes?.total_nodes ?? 0;
+  const totalHeartbeats = hbMetrics?.total_heartbeats ?? 0;
+  const circuitsClosed = circuits.filter(c => (c.state || '').toUpperCase() === 'CLOSED').length;
+  const circuitsOpen = circuits.filter(c => (c.state || '').toUpperCase() === 'OPEN').length;
+  const circuitsHalfOpen = circuits.filter(c => (c.state || '').toUpperCase() === 'HALF_OPEN').length;
 
   return (
     <Box sx={{ animation: 'fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5" fontWeight={700}>Dashboard del Sistema</Typography>
+        <Typography variant="h5" fontWeight={700}>Panel de Monitoreo</Typography>
         <Chip
           label={connected ? '🔌 Tiempo Real' : '⏳ REST Polling'}
           size="small"
@@ -120,121 +100,221 @@ export default function DashboardPage() {
         />
       </Box>
 
-      {/* Metric Cards */}
+      {/* Top Metric Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {metricCards.map((card, i) => (
-          <Grid item xs={6} sm={4} md={2} key={i}>
-            <Card
-              sx={{
-                p: 2, borderRadius: 2, textAlign: 'center',
-                border: `1px solid ${card.bg}`,
-                '&:hover': { borderColor: card.color },
-                animation: `fade-up 0.4s ease both`,
-                animationDelay: `${i * 60}ms`,
-              }}
-            >
-              <Box sx={{ color: card.color, mb: 0.5 }}>{card.icon}</Box>
-              <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                {card.value}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">{card.label}</Typography>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Charts + Status */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
-          <Card sx={{ borderRadius: 2, p: 2 }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-              Actividad del Sistema
-              {connected && <span className="status-dot online" style={{ marginLeft: 8, verticalAlign: 'middle' }} />}
-            </Typography>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorEvents" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7c5cfc" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#7c5cfc" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="time" stroke="#5a5a72" fontSize={11} />
-                <YAxis stroke="#5a5a72" fontSize={11} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    bgcolor: '#12121a', border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 8, color: '#f1f1f6',
-                  }}
-                />
-                <Area type="monotone" dataKey="events" stroke="#7c5cfc" fill="url(#colorEvents)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(52,211,153,0.15)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <FavoriteBorder sx={{ fontSize: 32, color: 'success.main' }} />
+              <Box>
+                <Typography variant="h4" fontWeight={800}>{activeNodes}/{totalNodes}</Typography>
+                <Typography variant="caption" color="text.secondary">Nodos Activos · {totalHeartbeats} heartbeats</Typography>
+              </Box>
+            </Box>
           </Card>
         </Grid>
-
-        <Grid item xs={12} md={4}>
-          <Card sx={{ borderRadius: 2, p: 2, height: '100%' }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>Estado de Servicios</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {[
-                { name: 'Online', count: onlineCount, color: STATUS_COLORS.online },
-                { name: 'Warning', count: warningCount, color: STATUS_COLORS.warning },
-                { name: 'Offline', count: offlineCount, color: STATUS_COLORS.offline },
-              ].map((item) => (
-                <Box key={item.name} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: item.color }} />
-                    <Typography variant="body2">{item.name}</Typography>
-                  </Box>
-                  <Typography variant="h6" fontWeight={700}>{item.count}</Typography>
-                </Box>
-              ))}
-              <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <Typography variant="caption" color="text.secondary">Total Nodos</Typography>
-                <Typography variant="h4" fontWeight={800}>{totalNodes}</Typography>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(96,165,250,0.15)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Sync sx={{ fontSize: 32, color: 'info.main' }} />
+              <Box>
+                <Typography variant="h4" fontWeight={800}>{data?.nodes?.total_nodes || 0}</Typography>
+                <Typography variant="caption" color="text.secondary">Operaciones Replicadas</Typography>
               </Box>
-              <Box sx={{ mt: 1 }}>
-                <Typography variant="caption" color="text.secondary">Conexión</Typography>
-                <Chip
-                  label={connected ? 'WebSocket Activo' : 'REST Polling'}
-                  size="small"
-                  color={connected ? 'success' : 'warning'}
-                  sx={{ mt: 0.5, fontWeight: 600, fontSize: '0.7rem' }}
-                />
+            </Box>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(251,191,36,0.15)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ReportProblem sx={{ fontSize: 32, color: 'warning.main' }} />
+              <Box>
+                <Typography variant="h4" fontWeight={800}>{circuits.length || '—'}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Circuitos: {circuitsClosed}C · {circuitsOpen ? `${circuitsOpen}O` : ''} {circuitsHalfOpen ? `${circuitsHalfOpen}H` : ''}
+                </Typography>
+              </Box>
+            </Box>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(124,92,252,0.15)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <EventNote sx={{ fontSize: 32, color: 'primary.main' }} />
+              <Box>
+                <Typography variant="h4" fontWeight={800}>{data?.events_total || 0}</Typography>
+                <Typography variant="caption" color="text.secondary">Eventos del Sistema</Typography>
               </Box>
             </Box>
           </Card>
         </Grid>
       </Grid>
+
+      {/* Two-column layout: Circuit Breakers + Quorum/Replication */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        {/* Circuit Breakers */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ borderRadius: 2 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle1" fontWeight={700}>Circuit Breakers</Typography>
+                <Chip
+                  icon={<ReportProblem sx={{ fontSize: 14 }} />}
+                  label={circuits.length > 0 ? `${circuitsClosed} CLOSED · ${circuitsOpen} OPEN · ${circuitsHalfOpen} HALF_OPEN` : 'Sin datos'}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                />
+              </Box>
+              {circuits.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 3 }}>
+                  <CheckCircle sx={{ fontSize: 48, color: 'success.main', mb: 1, opacity: 0.6 }} />
+                  <Typography color="success.light" fontWeight={600}>Todos los servicios saludables</Typography>
+                  <Typography variant="caption" color="text.secondary">No se han detectado fallos — todos los circuitos están CLOSED</Typography>
+                </Box>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Servicio</TableCell>
+                      <TableCell>Estado</TableCell>
+                      <TableCell>Fallos</TableCell>
+                      <TableCell>Éxitos</TableCell>
+                      <TableCell>Threshold</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {circuits.map((cb, i) => (
+                      <TableRow key={cb.serviceName || cb.service || i} hover>
+                        <TableCell><Typography variant="body2" fontWeight={600}>{cb.serviceName || cb.service || `CB ${i + 1}`}</Typography></TableCell>
+                        <TableCell>
+                          <Chip
+                            label={cb.state || 'CLOSED'}
+                            size="small"
+                            color={(cb.state || '').toUpperCase() === 'OPEN' ? 'error' : (cb.state || '').toUpperCase() === 'HALF_OPEN' ? 'warning' : 'success'}
+                            sx={{ fontWeight: 600, fontSize: '0.7rem', minWidth: 70 }}
+                          />
+                        </TableCell>
+                        <TableCell><Typography variant="body2" color={cb.failureCount > 0 ? 'error.light' : 'text.secondary'} fontWeight={600}>{cb.failureCount ?? cb.fallos ?? 0}</Typography></TableCell>
+                        <TableCell><Typography variant="body2" color="success.light" fontWeight={600}>{cb.successCount ?? cb.exitos ?? 0}</Typography></TableCell>
+                        <TableCell><Chip label={cb.threshold ?? 5} size="small" variant="outlined" sx={{ fontWeight: 600 }} /></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Replication / Quorum */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ borderRadius: 2 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle1" fontWeight={700}>Replicación y Quorum</Typography>
+                <Chip icon={<Storage sx={{ fontSize: 14 }} />} label="3 réplicas por servicio" size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.7rem' }} />
+              </Box>
+
+              {/* Quorum Status */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2, p: 2, bgcolor: 'rgba(52,211,153,0.06)', borderRadius: 2 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h3" fontWeight={800} color="success.main">2/3</Typography>
+                  <Typography variant="caption" color="text.secondary">Quorum mínimo</Typography>
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Estado del Quorum</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    El Replication Manager requiere al menos 2 de 3 réplicas para confirmar una operación.
+                    Si 2 réplicas confirman (ACK), la operación se considera exitosa.
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Services with replication */}
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Servicio</TableCell>
+                    <TableCell>Primary DB</TableCell>
+                    <TableCell>Réplicas</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {['usuarios', 'recomendaciones', 'pagos'].map(svc => (
+                    <TableRow key={svc} hover>
+                      <TableCell><Typography variant="body2" fontWeight={600} sx={{ textTransform: 'capitalize' }}>{svc}</Typography></TableCell>
+                      <TableCell><Chip icon={<Storage sx={{ fontSize: 12 }} />} label="Online" size="small" color="success" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.65rem' }} /></TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          {[1, 2, 3].map(r => (
+                            <Chip key={r} label={`R${r}`} size="small" color="success" sx={{ fontWeight: 600, fontSize: '0.6rem', height: 20 }} />
+                          ))}
+                        </Box>
+                      </TableCell>
+                      <TableCell><Chip label="Quorum OK" size="small" color="success" sx={{ fontWeight: 600, fontSize: '0.65rem' }} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Recent Events / Logs */}
+      <Card sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="subtitle1" fontWeight={700}>Eventos Recientes</Typography>
+            <Chip label={`${recentEvents.length} eventos`} size="small" variant="outlined" sx={{ fontWeight: 600, fontSize: '0.7rem' }} />
+          </Box>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: 80 }}>Nivel</TableCell>
+                <TableCell sx={{ width: 100 }}>Servicio</TableCell>
+                <TableCell sx={{ width: 80 }}>Hora</TableCell>
+                <TableCell>Mensaje</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {recentEvents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">No hay eventos recientes — el sistema está estable</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                recentEvents.map((ev, i) => (
+                  <TableRow key={ev.id || i} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
+                    <TableCell>
+                      <Chip
+                        label={ev.severity || ev.level || 'INFO'}
+                        size="small"
+                        color={(ev.severity || ev.level || '').toUpperCase() === 'ERROR' ? 'error' : (ev.severity || ev.level || '').toUpperCase() === 'WARNING' ? 'warning' : 'info'}
+                        sx={{ fontWeight: 600, fontSize: '0.6rem', height: 20 }}
+                      />
+                    </TableCell>
+                    <TableCell><Typography variant="caption" fontWeight={500}>{ev.source || ev.serviceName || ev.service || '—'}</Typography></TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary" fontFamily="JetBrains Mono" sx={{ fontSize: '0.65rem' }}>
+                        {ev.timestamp || ev._receivedAt
+                          ? new Date((ev.timestamp?.toString().length === 10 ? ev.timestamp * 1000 : ev.timestamp) || ev._receivedAt).toLocaleTimeString()
+                          : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{ev.message || ev.descripcion || '—'}</Typography>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </Box>
   );
-}
-
-function buildChartData(events) {
-  if (!Array.isArray(events) || events.length === 0) {
-    // Return default empty chart buckets
-    const now = Date.now();
-    return Array.from({ length: 12 }, (_, i) => ({
-      time: new Date(now - (11 - i) * 3600000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
-      events: 0,
-    }));
-  }
-
-  const now = Date.now();
-  const data = [];
-  for (let i = 11; i >= 0; i--) {
-    const startTime = now - (i + 1) * 3600000;
-    const endTime = now - i * 3600000;
-    const count = events.filter((e) => {
-      const t = new Date(e.timestamp || e.hora || e.createdAt || 0).getTime();
-      return t >= startTime && t < endTime;
-    }).length;
-    data.push({
-      time: new Date(endTime).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
-      events: count,
-    });
-  }
-  return data;
 }

@@ -23,7 +23,7 @@ export default function MovieCard({ movie, onClick }) {
           component="img"
           className="movie-img"
           height={180}
-          image={movie.posterUrl || `https://picsum.photos/seed/${imgSeed}/400/300`}
+          image={movie.posterUrl || '/boletos.svg'}
           alt={movie.title}
           sx={{ objectFit: 'cover', transition: 'transform 0.4s cubic-bezier(0.22,1,0.36,1)' }}
         />

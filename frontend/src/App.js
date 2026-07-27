@@ -23,9 +23,9 @@ import HeartbeatsPage from './pages/admin/HeartbeatsPage';
 import ReplicationPage from './pages/admin/ReplicationPage';
 import CircuitBreakersPage from './pages/admin/CircuitBreakersPage';
 import LogsPage from './pages/admin/LogsPage';
-import EventsPage from './pages/admin/EventsPage';
-import TopologyPage from './pages/admin/TopologyPage';
 import SimulationPage from './pages/admin/SimulationPage';
+import CreateMoviePage from './pages/admin/CreateMoviePage';
+import CreateUserPage from './pages/admin/CreateUserPage';
 
 function ProtectedRoute({ children, requireAdmin = false }) {
   const { isAuthenticated, isAdmin } = useAuth();
@@ -75,13 +75,13 @@ export default function App() {
               }
             >
               <Route path="/admin" element={<DashboardPage />} />
-              <Route path="/admin/topology" element={<TopologyPage />} />
               <Route path="/admin/heartbeats" element={<HeartbeatsPage />} />
               <Route path="/admin/replication" element={<ReplicationPage />} />
               <Route path="/admin/circuit-breakers" element={<CircuitBreakersPage />} />
               <Route path="/admin/logs" element={<LogsPage />} />
-              <Route path="/admin/events" element={<EventsPage />} />
               <Route path="/admin/simulation" element={<SimulationPage />} />
+              <Route path="/admin/create-movie" element={<CreateMoviePage />} />
+              <Route path="/admin/create-user" element={<CreateUserPage />} />
             </Route>
 
             {/* Fallback - must be last */}
