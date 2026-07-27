@@ -139,8 +139,11 @@ class CircuitBreakerStateMachine:
             if len(cb.recent_failures) > cb.max_window_size:
                 cb.recent_failures = cb.recent_failures[-cb.max_window_size:]
 
-        # Evaluar si debemos abrir el circuito
+        # Evaluar si debemos abrir el circuito (CLOSED → OPEN)
         self._evaluate_open(cb)
+
+        # Evaluar si debemos volver a OPEN desde HALF_OPEN por este fallo
+        self._evaluate_close(cb)
 
         self._add_event(CircuitEvent(
             type=CircuitEventType.FAILURE_RECORDED.value,
